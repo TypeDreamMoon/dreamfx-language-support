@@ -15,6 +15,7 @@
   },
   "license": "MIT",
   "copyright": "Copyright (c) 2026 TypeDreamMoon. All rights reserved.",
+  "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
