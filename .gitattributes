@@ -1,0 +1,10 @@
+# The repo stores LF. The release workflow runs on Linux and contains a shell heredoc, which a CRLF
+# checkout would break -- so this is pinned rather than left to whatever autocrlf is set to locally.
+* text=auto eol=lf
+
+# PowerShell is only ever run on Windows here, and a CRLF checkout keeps it consistent with the
+# plugin's own scripts.
+*.ps1 text eol=crlf
+
+*.png binary
+*.vsix binary

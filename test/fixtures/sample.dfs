@@ -1,0 +1,104 @@
+// A condensed NS_ToonHitSpark: every construct the walker has to survive, in one file.
+System(Name="Samples/NS_Fixture", Root="Plugin.DreamFX")
+{
+    Settings = {
+        WarmupTime  = 0.0;
+        FixedBounds = box(-200, -200, -50, 200, 200, 300);
+        ModulePaths = ["/Niagara/Modules", "/Game/FX/Modules"];
+    }
+
+    Properties = {
+        int              SparkCount = 24                     [ Group="Burst"; SortPriority=10 ];
+        float            SparkSpeed = 450.0;
+        Color            TintA      = (1.0, 0.72, 0.25, 1.0);
+        Vector           HitNormal  = (0, 0, 1)              [ Description="Impact normal" ];
+        DI<SkeletalMesh> TargetMesh;
+        float            `PillarPower(0~1)` = 0.5;
+    }
+
+    Emitter Sparks
+    {
+        Settings = {
+            SimTarget   = CPU;
+            Determinism = true;
+        }
+
+        Defaults = {
+            float  Particles.MySize = 1.0;
+            Vector Particles.Home   = Engine.Owner.Position;
+        }
+
+        EmitterUpdate = {
+            EmitterState(LifeCycleMode = Self, LoopBehavior = Once, LoopDuration = 0.15);
+            SpawnBurst_Instantaneous(SpawnCount = User.SparkCount, SpawnTime = 0.0);
+        }
+
+        ParticleSpawn = {
+            #Region "Initial state"
+            Spawn/Initialization/V2/InitializeParticle(
+                LifetimeMode = Random,
+                LifetimeMin  = 0.25,
+                LifetimeMax  = 0.55
+            );
+            #EndRegion
+
+            SystemLocation();
+            disabled AddVelocityInCone(ConeAxis = User.HitNormal);
+
+            Particles.Moon.SparkSeed = 0.5;
+            Particles.Moon.SparkTint = User.TintA;
+        }
+
+        ParticleUpdate = {
+            ParticleState();
+            GravityForce(Gravity = (0, 0, -680));
+            Drag@1.2(Drag = 1.4);
+            SolveForcesAndVelocity();
+
+            ScaleSpriteSize(
+                ScaleSpriteSizeMode = Uniform,
+                UniformScaleFactor  = FloatFromCurve(
+                    FloatCurve = curve {
+                        0.0 -> 1.0;
+                        0.7 -> 0.85 [ Interp=Cubic; Arrive=-0.4; Leave=-1.2 ];
+                        1.0 -> 0.0  [ Interp=Linear ];
+                    },
+                    CurveIndex = Particles.NormalizedAge
+                )
+            );
+
+            Grid3D_ResampleFloat() as Grid3D_ResampleFloat003;
+
+            Color Particles.Color = hlsl {
+                float4(Particles.Color.rgb, saturate(1.0 - Particles.NormalizedAge))
+            };
+        }
+
+        Stage Settle = {
+            ScaleColor();
+        }
+
+        Stage Project(DataInterface = "Emitter.PressureGrid", NumIterations = 10) = {
+            ScaleColor();
+        }
+
+        OnEvent(Source = Sparks, Event = "LocationEvent", Mode = SpawnedParticles, SpawnNumber = 2) = {
+            ReceiveLocationEvent();
+        }
+
+        SpriteRenderer Core
+        {
+            Alignment = Unaligned;
+
+            Bind SpriteSize -> Particles.SpriteSize;
+            Bind Color      -> Particles.Color;
+        }
+    }
+
+    Emitter Flash from "../Emitters/E_MoonFlashCard"
+    {
+        EmitterUpdate = {
+            EmitterState(LifeCycleMode = Self, LoopBehavior = Once, LoopDuration = 0.08);
+        }
+    }
+}

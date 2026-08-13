@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/out/src/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    },
+    {
+      "name": "Run Extension (on the DreamFX workspace)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${input:dfxWorkspace}"
+      ],
+      "outFiles": ["${workspaceFolder}/out/src/**/*.js"],
+      "preLaunchTask": "npm: compile"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "dfxWorkspace",
+      "type": "promptString",
+      "description": "Path to a project's DFX/DreamFX.code-workspace, or any folder holding .dfs sources.",
+      "default": ""
+    }
+  ]
+}

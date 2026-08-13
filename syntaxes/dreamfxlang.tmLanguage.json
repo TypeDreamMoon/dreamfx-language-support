@@ -1,0 +1,305 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "DreamFXLang",
+  "scopeName": "source.dreamfxlang",
+  "fileTypes": ["dfs", "dfe", "dfm"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#region" },
+    { "include": "#hlsl-value" },
+    { "include": "#body-block" },
+    { "include": "#string" },
+    { "include": "#backquoted-name" },
+    { "include": "#document-header" },
+    { "include": "#emitter-declaration" },
+    { "include": "#stage-declaration" },
+    { "include": "#renderer-declaration" },
+    { "include": "#section-keyword" },
+    { "include": "#stack-keyword" },
+    { "include": "#special-stack-keyword" },
+    { "include": "#modifier-keyword" },
+    { "include": "#value-keyword" },
+    { "include": "#data-interface-type" },
+    { "include": "#type-keyword" },
+    { "include": "#constant" },
+    { "include": "#namespace" },
+    { "include": "#builtin-function" },
+    { "include": "#attribute-key" },
+    { "include": "#module-call" },
+    { "include": "#enum-value" },
+    { "include": "#number" },
+    { "include": "#operator" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.dreamfxlang",
+          "begin": "//",
+          "end": "$"
+        },
+        {
+          "name": "comment.block.dreamfxlang",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+
+    "region": {
+      "comment": "L5: #Region is a comment -- it never reaches the asset. Scoped as a region marker anyway, because folding is the only thing anyone wants from it.",
+      "match": "^\\s*(#(?:Region|EndRegion))\\b[ \\t]*(\"[^\"]*\")?",
+      "captures": {
+        "1": { "name": "keyword.control.region.dreamfxlang" },
+        "2": { "name": "string.quoted.double.dreamfxlang" }
+      }
+    },
+
+    "hlsl-value": {
+      "comment": "An hlsl { } block is raw text the compiler never tokenises. Handing it to the HLSL grammar is both nicer to read and the only way to stop a stray quote inside it from running away as a DSL string.",
+      "begin": "\\b(hlsl)\\s*(?=\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.other.hlsl.dreamfxlang" }
+      },
+      "end": "(?<=\\})",
+      "patterns": [{ "include": "#raw-hlsl-block" }]
+    },
+
+    "body-block": {
+      "comment": "A .dfm's Body is the same raw-text construct as hlsl { }, and unlike it routinely contains braces of its own -- hence the recursive nesting rule below.",
+      "begin": "\\b(Body)\\s*(=)\\s*(?=\\{)",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.section.dreamfxlang" },
+        "2": { "name": "keyword.operator.assignment.dreamfxlang" }
+      },
+      "end": "(?<=\\})",
+      "patterns": [{ "include": "#raw-hlsl-block" }]
+    },
+
+    "raw-hlsl-block": {
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.embedded.begin.dreamfxlang" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.section.embedded.end.dreamfxlang" }
+      },
+      "contentName": "meta.embedded.block.hlsl",
+      "patterns": [
+        { "include": "#nested-braces" },
+        { "include": "source.hlsl" }
+      ]
+    },
+
+    "nested-braces": {
+      "comment": "TextMate cannot count, so nesting is expressed by a rule that includes itself. Without this the first inner '}' of an if-block would close the whole body.",
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        { "include": "#nested-braces" },
+        { "include": "source.hlsl" }
+      ]
+    },
+
+    "string": {
+      "name": "string.quoted.double.dreamfxlang",
+      "begin": "\"",
+      "end": "\"|(?<!\\\\)(?=$)",
+      "patterns": [
+        {
+          "name": "constant.character.escape.dreamfxlang",
+          "match": "\\\\."
+        }
+      ]
+    },
+
+    "backquoted-name": {
+      "comment": "Niagara names come from a UI with no restrictions -- `Ring/DiscDistributionMode` is real content. One token, dots included.",
+      "name": "variable.other.quoted.dreamfxlang",
+      "begin": "`",
+      "end": "`|(?=$)",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.quoted-name.begin.dreamfxlang" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.quoted-name.end.dreamfxlang" }
+      }
+    },
+
+    "document-header": {
+      "comment": "Every file is one of these four, and the kind has to agree with the extension (DFX2021).",
+      "match": "\\b(System|Emitter|Module|DynamicInput)\\b(?=\\s*\\()",
+      "captures": {
+        "1": { "name": "storage.type.document.dreamfxlang" }
+      }
+    },
+
+    "emitter-declaration": {
+      "match": "\\b(Emitter)\\s+(`[^`\\n]*`|[A-Za-z_][A-Za-z0-9_]*)(?:\\s+(from))?",
+      "captures": {
+        "1": { "name": "storage.type.emitter.dreamfxlang" },
+        "2": { "name": "entity.name.type.emitter.dreamfxlang" },
+        "3": { "name": "keyword.control.from.dreamfxlang" }
+      }
+    },
+
+    "stage-declaration": {
+      "comment": "Stages are identified by name and nothing else (DFX5032), so the name is the navigable thing here.",
+      "match": "\\b(Stage)\\s+(`[^`\\n]*`|[A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.control.stack.dreamfxlang" },
+        "2": { "name": "entity.name.type.stage.dreamfxlang" }
+      }
+    },
+
+    "renderer-declaration": {
+      "comment": "Matched by shape rather than a fixed list: renderer properties are schema-driven (L8) and the set of renderer types grows with the engine.",
+      "match": "\\b([A-Za-z_][A-Za-z0-9_]*Renderer)\\b(?:\\s+(`[^`\\n]*`|[A-Za-z_][A-Za-z0-9_]*))?",
+      "captures": {
+        "1": { "name": "storage.type.renderer.dreamfxlang" },
+        "2": { "name": "entity.name.type.renderer.dreamfxlang" }
+      }
+    },
+
+    "section-keyword": {
+      "match": "\\b(Settings|Properties|Inputs|Defaults)\\b(?=\\s*=)",
+      "captures": {
+        "1": { "name": "keyword.control.section.dreamfxlang" }
+      }
+    },
+
+    "stack-keyword": {
+      "comment": "L1: six stacks, two at system scope and four per emitter.",
+      "name": "keyword.control.stack.dreamfxlang",
+      "match": "\\b(SystemSpawn|SystemUpdate|EmitterSpawn|EmitterUpdate|ParticleSpawn|ParticleUpdate)\\b"
+    },
+
+    "special-stack-keyword": {
+      "name": "keyword.control.stack.dreamfxlang",
+      "match": "\\b(OnEvent|Stage)\\b"
+    },
+
+    "modifier-keyword": {
+      "comment": "`disabled` parks a module without deleting it; `as` pins the function call node's name; `Bind` is separate from property assignment because a binding is not a plain field.",
+      "name": "keyword.control.dreamfxlang",
+      "match": "\\b(disabled|from|as|Bind|MaterialParam)\\b"
+    },
+
+    "value-keyword": {
+      "name": "keyword.other.value.dreamfxlang",
+      "match": "\\b(hlsl|curve|box)\\b"
+    },
+
+    "data-interface-type": {
+      "match": "\\b(DI)\\s*(<)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(>)",
+      "captures": {
+        "1": { "name": "storage.type.dreamfxlang" },
+        "2": { "name": "punctuation.definition.typeparameters.begin.dreamfxlang" },
+        "3": { "name": "entity.name.type.dreamfxlang" },
+        "4": { "name": "punctuation.definition.typeparameters.end.dreamfxlang" }
+      }
+    },
+
+    "type-keyword": {
+      "name": "storage.type.dreamfxlang",
+      "match": "\\b(float|int|bool|Vector2|Vector4|Vector|Color|Position|Quat|Texture2D|DI)\\b"
+    },
+
+    "constant": {
+      "name": "constant.language.dreamfxlang",
+      "match": "\\b(true|false)\\b"
+    },
+
+    "namespace": {
+      "comment": "The five parameter namespaces, plus Module. inside a .dfm and Output. for a node's outputs.",
+      "match": "\\b(User|Particles|Emitter|System|Engine|Module|Output)\\s*(\\.)",
+      "captures": {
+        "1": { "name": "entity.name.namespace.dreamfxlang" },
+        "2": { "name": "punctuation.accessor.dreamfxlang" }
+      }
+    },
+
+    "builtin-function": {
+      "comment": "L6: the whole whitelist. Anything outside it is DFX4031, and the list is short on purpose.",
+      "name": "support.function.builtin.dreamfxlang",
+      "match": "\\b(normalize|saturate|clamp|lerp|frac|min|max|abs|floor|ceil|pow|sqrt|dot|cross|length)\\b(?=\\s*\\()"
+    },
+
+    "attribute-key": {
+      "comment": "Declaration attributes and curve-key attributes. Group and SortPriority stay in the source as documentation -- they have nowhere to go on the asset (DFX5099).",
+      "name": "entity.other.attribute-name.dreamfxlang",
+      "match": "\\b(Description|Group|SortPriority|Advanced|StaticSwitch|Interp|Tangent|Arrive|Leave)\\b"
+    },
+
+    "module-call": {
+      "comment": "A module name, optionally a partial path when the short name is ambiguous (L4), optionally an @version pin (R7).",
+      "match": "\\b([A-Za-z_][A-Za-z0-9_]*(?:/[A-Za-z_][A-Za-z0-9_]*)*)\\s*(?:(@)([0-9]+(?:\\.[0-9]+)*))?\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.dreamfxlang" },
+        "2": { "name": "punctuation.definition.version.dreamfxlang" },
+        "3": { "name": "constant.numeric.version.dreamfxlang" }
+      }
+    },
+
+    "enum-value": {
+      "comment": "Enum entries are written by name with spaces and hyphens removed, and the real set is read off the live asset -- so this is matched by position, not by a list.",
+      "match": "(=)\\s*([A-Z][A-Za-z0-9_]*)\\s*(?=[;,)\\]])",
+      "captures": {
+        "1": { "name": "keyword.operator.assignment.dreamfxlang" },
+        "2": { "name": "variable.other.enummember.dreamfxlang" }
+      }
+    },
+
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.dreamfxlang",
+          "match": "\\b[0-9]+\\.[0-9]*(?:[eE][+-]?[0-9]+)?[fF]?\\b|\\B\\.[0-9]+(?:[eE][+-]?[0-9]+)?[fF]?\\b|\\b[0-9]+[eE][+-]?[0-9]+[fF]?\\b|\\b[0-9]+[fF]\\b"
+        },
+        {
+          "comment": "24 and 24.0 are different literals and L7 uses the distinction, so they get different scopes.",
+          "name": "constant.numeric.integer.dreamfxlang",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+
+    "operator": {
+      "patterns": [
+        {
+          "name": "keyword.operator.binding.dreamfxlang",
+          "match": "->"
+        },
+        {
+          "name": "keyword.operator.assignment.dreamfxlang",
+          "match": "\\+=|-=|\\*=|/=|="
+        },
+        {
+          "name": "keyword.operator.comparison.dreamfxlang",
+          "match": "==|!=|<=|>="
+        },
+        {
+          "name": "keyword.operator.logical.dreamfxlang",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.arithmetic.dreamfxlang",
+          "match": "[+\\-*/%]"
+        }
+      ]
+    },
+
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.section.block.dreamfxlang", "match": "[{}]" },
+        { "name": "punctuation.section.brackets.dreamfxlang", "match": "[\\[\\]]" },
+        { "name": "punctuation.section.parens.dreamfxlang", "match": "[()]" },
+        { "name": "punctuation.terminator.dreamfxlang", "match": ";" },
+        { "name": "punctuation.separator.dreamfxlang", "match": "," },
+        { "name": "punctuation.accessor.dreamfxlang", "match": "\\." }
+      ]
+    }
+  }
+}

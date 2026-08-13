@@ -1,0 +1,241 @@
+{
+  "name": "dreamfxlang-language-support",
+  "displayName": "DreamFXLang Language Support",
+  "description": "Language support for DreamFXLang .dfs systems, .dfe emitters and .dfm modules.",
+  "version": "0.1.0",
+  "publisher": "typedreammoon",
+  "author": {
+    "name": "TypeDreamMoon",
+    "url": "https://github.com/TypeDreamMoon"
+  },
+  "homepage": "https://dev.64hz.cn",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TypeDreamMoon/dreamfx-language-support"
+  },
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 TypeDreamMoon. All rights reserved.",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "dreamfxlang",
+    "dreamfx",
+    "niagara",
+    "unreal",
+    "vfx",
+    "particles",
+    "dfs",
+    "dfe",
+    "dfm"
+  ],
+  "activationEvents": [
+    "onLanguage:dreamfxlang",
+    "workspaceContains:**/*.dfs",
+    "workspaceContains:**/*.dfe",
+    "workspaceContains:**/*.dfm"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "dreamfxlang",
+        "aliases": [
+          "DreamFXLang",
+          "dreamfxlang",
+          "DreamFX",
+          "dreamfx"
+        ],
+        "extensions": [
+          ".dfs",
+          ".dfe",
+          ".dfm"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "dreamfxlang",
+        "scopeName": "source.dreamfxlang",
+        "path": "./syntaxes/dreamfxlang.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.hlsl": "hlsl"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "dreamfxlang",
+        "path": "./snippets/dreamfxlang.code-snippets"
+      }
+    ],
+    "commands": [
+      {
+        "command": "dreamfx.newFile",
+        "title": "DreamFXLang: New Source File",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "dreamfx.verifyFile",
+        "title": "DreamFXLang: Verify Current File",
+        "icon": "$(check)"
+      },
+      {
+        "command": "dreamfx.verifyAll",
+        "title": "DreamFXLang: Verify All Sources"
+      },
+      {
+        "command": "dreamfx.lintFile",
+        "title": "DreamFXLang: Lint Current File"
+      },
+      {
+        "command": "dreamfx.lintAll",
+        "title": "DreamFXLang: Lint All Sources"
+      },
+      {
+        "command": "dreamfx.buildFile",
+        "title": "DreamFXLang: Build Current File (writes assets)",
+        "icon": "$(play)"
+      },
+      {
+        "command": "dreamfx.buildAll",
+        "title": "DreamFXLang: Build All Sources (writes assets)"
+      },
+      {
+        "command": "dreamfx.showOutput",
+        "title": "DreamFXLang: Show Output Channel"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "dreamfx.verifyFile",
+          "when": "resourceLangId == dreamfxlang",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dreamfx.buildFile",
+          "when": "resourceLangId == dreamfxlang",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "dreamfx.verifyFile",
+          "when": "resourceLangId == dreamfxlang",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dreamfx.buildFile",
+          "when": "resourceLangId == dreamfxlang",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "taskDefinitions": [
+      {
+        "type": "dreamfx",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "verify",
+              "lint",
+              "build"
+            ],
+            "description": "Which dfx command to run. verify and lint are read-only; build writes assets."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "file",
+              "all"
+            ],
+            "default": "file",
+            "description": "Run on the active file, or on every source under every DFX root."
+          },
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "build: bypass the provenance-hash skip so an unchanged source is rebuilt anyway."
+          },
+          "strictVersions": {
+            "type": "boolean",
+            "default": false,
+            "description": "verify: treat an R7 module-version mismatch as an error rather than a warning."
+          }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "dreamfx",
+        "label": "DreamFXLang diagnostics",
+        "owner": "dreamfxlang",
+        "source": "dfx",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(?:.*?LogDreamFX:\\s*(?:Error|Warning|Display|Verbose|Log):\\s*)?(\\S[^()]*?)\\((\\d+),(\\d+)\\):\\s+(error|warning|info)\\s+(DFX\\d+):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "code": 5,
+          "message": 6
+        }
+      }
+    ],
+    "configuration": {
+      "title": "DreamFXLang",
+      "properties": {
+        "dreamfx.dfxScriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the plugin's .skill/dfx.ps1. Leave empty to search the workspace folders and then upward from the active file."
+        },
+        "dreamfx.powershellPath": {
+          "type": "string",
+          "default": "pwsh",
+          "description": "PowerShell executable used to run dfx.ps1. Use 'powershell' for Windows PowerShell 5.1."
+        },
+        "dreamfx.syntaxDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Report lexical problems (unterminated string, block comment, back-quoted name or raw block) while typing. Semantic problems come from dfx and are never guessed at here."
+        },
+        "dreamfx.confirmBuild": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask before running build. Build writes packages, and a running Unreal Editor saving the same packages means the later save silently wins."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node --test out/test/",
+    "package": "npm run compile && npx @vscode/vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.2",
+    "typescript": "^5.5.4",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

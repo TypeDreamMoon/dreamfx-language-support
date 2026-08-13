@@ -1,0 +1,364 @@
+{
+  "System document": {
+    "prefix": "sys",
+    "description": "A .dfs: one UNiagaraSystem. The module set is the Phase 1 vertical slice, which the corpus builds green.",
+    "body": [
+      "System(Name=\"${1:Samples/NS_Spark}\", Root=\"${2:Game}\")",
+      "{",
+      "\tEmitter ${3:Main}",
+      "\t{",
+      "\t\tEmitterUpdate = {",
+      "\t\t\tEmitterState();",
+      "\t\t\tSpawnBurst_Instantaneous(SpawnCount = ${4:24}, SpawnTime = 0.0);",
+      "\t\t}",
+      "",
+      "\t\tParticleSpawn = {",
+      "\t\t\tSystemLocation(Offset = (0, 0, 0));",
+      "\t\t}",
+      "",
+      "\t\tParticleUpdate = {",
+      "\t\t\tGravityForce(Gravity = (0, 0, ${5:-680}));",
+      "\t\t\tSolveForcesAndVelocity();",
+      "\t\t}",
+      "",
+      "\t\tSpriteRenderer Core",
+      "\t\t{",
+      "\t\t}",
+      "\t}",
+      "}",
+      "$0"
+    ]
+  },
+
+  "Emitter document": {
+    "prefix": "dfe",
+    "description": "A .dfe: one reusable emitter, pulled into a system with `from`.",
+    "body": [
+      "Emitter(Name=\"${1:Emitters/E_Flash}\", Root=\"${2:Game}\")",
+      "{",
+      "\tSettings = {",
+      "\t\tSimTarget  = ${3|CPU,GPU|};",
+      "\t\tLocalSpace = ${4|true,false|};",
+      "\t}",
+      "",
+      "\tEmitterUpdate = {",
+      "\t\tEmitterState(LifeCycleMode = Self, LoopBehavior = Once, LoopDuration = ${5:0.12});",
+      "\t\tSpawnBurst_Instantaneous(SpawnCount = ${6:1});",
+      "\t}",
+      "",
+      "\tParticleSpawn = {",
+      "\t\tSystemLocation();",
+      "\t}",
+      "",
+      "\tParticleUpdate = {",
+      "\t\tParticleState();",
+      "\t}",
+      "",
+      "\tSpriteRenderer Card",
+      "\t{",
+      "\t}",
+      "}",
+      "$0"
+    ]
+  },
+
+  "Module document": {
+    "prefix": "module",
+    "description": "A .dfm Module: a UNiagaraScript for a stack. The body takes statements.",
+    "body": [
+      "Module(Name=\"${1:Modules/M_Custom}\", Root=\"${2:Game}\")",
+      "{",
+      "\tSettings = {",
+      "\t\tUsage       = ${3|SystemSpawn,SystemUpdate,EmitterSpawn,EmitterUpdate,ParticleSpawn,ParticleUpdate|};",
+      "\t\tCategory    = \"${4:DreamFX|Custom}\";",
+      "\t\tDescription = \"${5:What it does.}\";",
+      "\t}",
+      "",
+      "\tInputs = {",
+      "\t\tfloat ${6:Amount} = ${7:1.0} [ Description=\"${8:Per second.}\" ];",
+      "\t}",
+      "",
+      "\tBody = {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ]
+  },
+
+  "DynamicInput document": {
+    "prefix": "dyninput",
+    "description": "A .dfm DynamicInput: computes one value for an input slot. The body is one expression.",
+    "body": [
+      "DynamicInput(Name=\"${1:Modules/DI_Custom}\", Root=\"${2:Game}\")",
+      "{",
+      "\tSettings = {",
+      "\t\tUsage    = DynamicInput;",
+      "\t\tOutput   = ${3|float,int,bool,Vector2,Vector,Vector4,Color,Position,Quat|};",
+      "\t\tCategory = \"${4:DreamFX|Custom}\";",
+      "\t}",
+      "",
+      "\tInputs = {",
+      "\t\tfloat ${5:Frequency} = ${6:6.0};",
+      "\t}",
+      "",
+      "\tBody = {",
+      "\t\treturn $0;",
+      "\t}",
+      "}"
+    ]
+  },
+
+  "Inline emitter": {
+    "prefix": "emitter",
+    "description": "An emitter written inline in a .dfs.",
+    "body": [
+      "Emitter ${1:Sparks}",
+      "{",
+      "\tEmitterUpdate = {",
+      "\t\t$0",
+      "\t}",
+      "",
+      "\tParticleSpawn = {",
+      "\t}",
+      "",
+      "\tParticleUpdate = {",
+      "\t}",
+      "}"
+    ]
+  },
+
+  "Emitter from a .dfe": {
+    "prefix": "emitterfrom",
+    "description": "Copy a .dfe into this system, then override blocks. Copy, not inheritance (R3).",
+    "body": [
+      "Emitter ${1:Flash} from \"${2:../Emitters/E_Flash}\"",
+      "{",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Settings block": {
+    "prefix": "settings",
+    "description": "Schema-driven: a misspelt key reports the real list (DFX3020).",
+    "body": [
+      "Settings = {",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Properties block": {
+    "prefix": "props",
+    "description": "User parameters. Each becomes User.<Name>, settable from blueprint.",
+    "body": [
+      "Properties = {",
+      "\t${1|float,int,bool,Vector2,Vector,Vector4,Color,Position,Quat,Texture2D|} ${2:Name} = ${3:0.0};",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Inputs block": {
+    "prefix": "inputs",
+    "description": "A module's inputs. Defaults must be literals or enum entries (DFX3044).",
+    "body": [
+      "Inputs = {",
+      "\t${1|float,int,bool,Vector2,Vector,Vector4,Color,Position,Quat|} ${2:Name} = ${3:1.0} [ Description=\"$4\" ];",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Defaults block": {
+    "prefix": "defaults",
+    "description": "What a read produces when nothing wrote. Entries need a declared type (DFX4028).",
+    "body": [
+      "Defaults = {",
+      "\t${1|float,int,bool,Vector2,Vector,Vector4,Color,Position,Quat|} ${2:Particles.Name} = ${3:0.0};",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Stack block": {
+    "prefix": "stack",
+    "description": "One of the six stacks. Writing order is module order (L1).",
+    "body": [
+      "${1|SystemSpawn,SystemUpdate,EmitterSpawn,EmitterUpdate,ParticleSpawn,ParticleUpdate|} = {",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "OnEvent handler": {
+    "prefix": "onevent",
+    "description": "React to another emitter's events. One handler per emitter (DFX5031).",
+    "body": [
+      "OnEvent(Source = ${1:Sparks}, Event = \"${2:LocationEvent}\", Mode = ${3|SpawnedParticles,EveryParticle|}, SpawnNumber = ${4:1}) = {",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Simulation stage": {
+    "prefix": "stage",
+    "description": "A particle stack that runs after ParticleUpdate, on a GPU emitter (DFX5033).",
+    "body": [
+      "Stage ${1:Settle} = {",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Simulation stage with a grid": {
+    "prefix": "stagegrid",
+    "description": "A stage iterating a data interface: one thread per cell rather than per particle.",
+    "body": [
+      "Stage ${1:Project}(DataInterface = \"${2:Emitter.PressureGrid}\", NumIterations = ${3:10}) = {",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Sprite renderer": {
+    "prefix": "sprite",
+    "description": "Declaration order is renderer order, and there is no other addressing scheme.",
+    "body": [
+      "SpriteRenderer ${1:Core}",
+      "{",
+      "\tMaterial   = \"${2:/Game/FX/M_Spark}\";",
+      "\tAlignment  = ${3|Unaligned,VelocityAligned,CustomAlignment|};",
+      "\tFacingMode = ${4|FaceCamera,FaceCameraPlane,Velocity,CustomFacingVector|};",
+      "",
+      "\tBind SpriteSize -> Particles.SpriteSize;",
+      "\tBind Color      -> Particles.Color;",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Mesh renderer": {
+    "prefix": "mesh",
+    "description": "Meshes and OverrideMaterials are written as arrays of asset paths.",
+    "body": [
+      "MeshRenderer ${1:Body}",
+      "{",
+      "\tMeshes = [\"${2:/Engine/BasicShapes/Cube}\"];",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Ribbon renderer": {
+    "prefix": "ribbon",
+    "description": "Renderer properties are schema-driven (L8): an unknown name reports the real list.",
+    "body": [
+      "RibbonRenderer ${1:Trail}",
+      "{",
+      "\tMaterial = \"${2:/Game/FX/M_Trail}\";",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Light renderer": {
+    "prefix": "light",
+    "body": [
+      "LightRenderer ${1:Glow}",
+      "{",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Attribute binding": {
+    "prefix": "bind",
+    "description": "Separate from property assignment: a binding is not a plain field.",
+    "body": ["Bind ${1:SpriteSize} -> ${2:Particles.SpriteSize};$0"]
+  },
+
+  "Curve literal": {
+    "prefix": "curve",
+    "description": "Fills a curve data interface. Tangents are per key and are exported per key.",
+    "body": [
+      "curve {",
+      "\t0.0 -> ${1:1.0};",
+      "\t1.0 -> ${2:0.0};",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Curve key with tangents": {
+    "prefix": "curvekey",
+    "description": "Break is how a key holds two independent tangents -- a corner.",
+    "body": ["${1:0.7} -> ${2:0.85} [ Interp=${3|Auto,Linear,Cubic,Constant|}; Tangent=${4|Auto,User,Break,None|}; Arrive=${5:0.0}; Leave=${6:0.0} ];$0"]
+  },
+
+  "HLSL expression": {
+    "prefix": "hlsl",
+    "description": "One expression only (DFX4030). Multi-statement logic belongs in a .dfm Module.",
+    "body": [
+      "hlsl {",
+      "\t$0",
+      "}"
+    ]
+  },
+
+  "Typed HLSL assignment": {
+    "prefix": "hlslassign",
+    "description": "An hlsl block carries no type of its own, so a new attribute needs one (DFX4022).",
+    "body": [
+      "${1|float,int,bool,Vector2,Vector,Vector4,Color,Position,Quat|} ${2:Particles.Color} = hlsl {",
+      "\t$0",
+      "};"
+    ]
+  },
+
+  "Data interface property": {
+    "prefix": "di",
+    "description": "Declared bare it stays a slot to fill at runtime; with a value it carries its configuration.",
+    "body": ["DI<${1:SkeletalMesh}> ${2:Name};$0"]
+  },
+
+  "Fixed bounds": {
+    "prefix": "box",
+    "description": "Six numbers: min xyz, max xyz.",
+    "body": ["FixedBounds = box(${1:-200}, ${2:-200}, ${3:-50}, ${4:200}, ${5:200}, ${6:300});$0"]
+  },
+
+  "Module search paths": {
+    "prefix": "modulepaths",
+    "description": "Adds search roots for short module names (L4). The engine defaults stay on the list.",
+    "body": ["ModulePaths = [\"${1:/Game/FX/Modules}\"];$0"]
+  },
+
+  "Disabled module call": {
+    "prefix": "disabled",
+    "description": "Parks a module without deleting it: it keeps its inputs and does not run.",
+    "body": ["disabled ${1:GravityForce}($0);"]
+  },
+
+  "Pinned node name": {
+    "prefix": "as",
+    "description": "Pins the function call node's name, which Output.<node>.<value> links resolve against.",
+    "body": ["${1:Grid3D_ResampleFloat}($2) as ${3:Grid3D_ResampleFloat003};$0"]
+  },
+
+  "Version-pinned module call": {
+    "prefix": "atversion",
+    "description": "Records and selects the module version the source was written against (R7).",
+    "body": ["${1:ModuleName}@${2:1.2}($0);"]
+  },
+
+  "Region": {
+    "prefix": "region",
+    "description": "A comment that folds. It does not reach the asset (L5).",
+    "body": [
+      "#Region \"${1:name}\"",
+      "$0",
+      "#EndRegion"
+    ]
+  }
+}

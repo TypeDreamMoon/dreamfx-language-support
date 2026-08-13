@@ -1,0 +1,10 @@
+# Sources and tests: the .vsix ships the compiled out/src, not the TypeScript it came from.
+src/**
+test/**
+out/test/**
+out/**/*.map
+tsconfig.json
+.github/**
+.vscode/**
+.gitignore
+*.vsix

@@ -1,0 +1,131 @@
+name: Build VSIX Release
+
+# Packages and publishes whenever something that ends up inside the .vsix changes on main. The tag
+# is derived from package.json rather than pushed by hand, so the version in the marketplace and the
+# version in the manifest cannot disagree.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/release.yml"
+      - ".vscodeignore"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "language-configuration.json"
+      - "install-vscode-extension.ps1"
+      - "README.md"
+      - "README.zh-CN.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - "src/**"
+      - "snippets/**"
+      - "syntaxes/**"
+      - "resources/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dreamfxlang-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Package and publish VSIX
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      # A .vsix that ships a broken grammar or an unregistered command installs cleanly and then
+      # does nothing, so the gate is in front of the package step rather than after it.
+      - name: Test
+        run: node --test out/test/
+
+      - name: Package VSIX
+        run: npx @vscode/vsce package
+
+      - name: Read package version
+        id: version
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          VSIX="dreamfxlang-language-support-${VERSION}.vsix"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "vsix=${VSIX}" >> "$GITHUB_OUTPUT"
+          test -f "$VSIX"
+
+      - name: Extract release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          const lines = fs.readFileSync('CHANGELOG.md', 'utf8').split(/\r?\n/);
+          const start = lines.findIndex((line) => line.trim() === `## ${version}`);
+          let notes = `Automated DreamFXLang Language Support release ${version}.`;
+          if (start !== -1) {
+            let end = lines.length;
+            for (let index = start + 1; index < lines.length; index += 1) {
+              if (/^##\s+/.test(lines[index])) {
+                end = index;
+                break;
+              }
+            }
+            notes = lines.slice(start + 1, end).join('\n').trim() || notes;
+          }
+          fs.writeFileSync('release-notes.md', `${notes}\n`, 'utf8');
+          NODE
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.vsix }}
+          path: ${{ steps.version.outputs.vsix }}
+
+      - name: Create version tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git fetch --tags --force
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VSIX: ${{ steps.version.outputs.vsix }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
+            gh release upload "$TAG" "$VSIX" --clobber
+          else
+            gh release create "$TAG" "$VSIX" --title "$TAG" --notes-file release-notes.md
+          fi
