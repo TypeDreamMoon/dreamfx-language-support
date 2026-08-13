@@ -1,6 +1,6 @@
 # DreamFXLang Language Support
 
-[![version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
 [![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -24,6 +24,7 @@ English | [简体中文](README.zh-CN.md)
 | **Snippets** | 26 skeletons: documents, stacks, `OnEvent`, `Stage`, renderers, `curve { }`, `hlsl { }`, `Bind`, `disabled`, `as`, `@version`, `#Region` |
 | **New file** | `DreamFXLang: New Source File` — pick a kind, name the asset, get a file that builds |
 | **Tasks and Problems** | `verify` / `lint` / `build`, as commands or tasks, with every `DFXnnnn` landing in the Problems panel as a clickable entry |
+| **Verify on save** | Opt-in (`dreamfx.verifyOnSave`): saving a source runs `dfx verify` and puts the result in Problems, one engine at a time. See [below](#verify-on-save) for why it is off by default |
 
 ## What it deliberately does not do
 
@@ -51,8 +52,8 @@ pwsh -File .skill/dfx.ps1 index
 ```
 
 or **`DreamFXLang: Rebuild Module Index`** from the command palette. On this project that is 571
-modules in about 8 seconds, and it is a command rather than something automatic because every `dfx`
-call boots the Unreal Editor — tens of seconds, which nothing triggered by typing may cost.
+modules in about 8 seconds of work behind a ~13-second engine boot, and it is a command rather than
+something automatic because nothing triggered by typing may cost that.
 
 Why a file and not a baked-in table: DreamFX resolves modules from the asset registry at runtime.
 Enable NiagaraFluids and a family of modules appears; open a different project and the whole set
@@ -62,12 +63,25 @@ The index records the engine path and the enabled plugin list, because those are
 Nothing compares them yet — that needs a live editor to compare against — so the status bar shows
 when the index was generated and rebuilding is one click.
 
+## Verify on save
+
+Turn on `dreamfx.verifyOnSave` and saving a source runs `dfx verify` against it, putting the result
+straight into Problems — no terminal, no task panel. It reads only; no packages are written. Saving
+the same file repeatedly queues it once, and a save arriving while a check is running joins the same
+queue rather than starting a second engine.
+
+**It is off by default because it is expensive, not because it is unfinished.** Measured here, one
+file takes **13 seconds**, essentially all of it engine boot — the check itself is a fraction of a
+second. That is fine for a deliberate pass over a file and much too slow to sit behind every save
+while iterating, and nothing in this extension can move it: the floor is the boot.
+
+`DreamFXLang: Verify Current File (quietly, into Problems)` runs the same thing on demand.
+
 ## Not yet
 
 | | Status |
 | --- | --- |
-| Verify-on-save | planned |
-| Two-way bridge to a running Unreal Editor (single-asset rebuild, open asset, decompile from VSCode) | planned |
+| Two-way bridge to a running Unreal Editor (single-asset rebuild, open asset, decompile from VSCode) | planned — and it is what makes verify-on-save affordable, because the engine is already loaded |
 
 ## Install
 
@@ -127,6 +141,7 @@ triggered by typing.
 | `dreamfx.powershellPath` | `"pwsh"` | Use `powershell` for Windows PowerShell 5.1 |
 | `dreamfx.syntaxDiagnostics` | `true` | Live lexical problems while typing |
 | `dreamfx.confirmBuild` | `true` | Ask before a command that writes packages |
+| `dreamfx.verifyOnSave` | `false` | Verify a source when it is saved. Reads only; ~13s per save |
 
 ## Development
 

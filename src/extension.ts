@@ -14,6 +14,7 @@ import { SyntaxDiagnostics } from './features/diagnostics';
 import { SchemaIndexCache, describeIndex } from './features/indexCache';
 import { newSourceFile } from './features/newFile';
 import { DreamFXDocumentSymbolProvider } from './features/symbols';
+import { VerifyOnSave } from './features/verifyOnSave';
 
 const LANGUAGE_SELECTOR: vscode.DocumentSelector = { language: 'dreamfxlang' };
 
@@ -23,7 +24,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	const runner = new DfxRunner(output);
 	const indexCache = new SchemaIndexCache(output);
-	context.subscriptions.push(indexCache);
+	const verifier = new VerifyOnSave(runner, output);
+	context.subscriptions.push(indexCache, verifier);
 
 	context.subscriptions.push(
 		vscode.languages.registerDocumentSymbolProvider(LANGUAGE_SELECTOR, new DreamFXDocumentSymbolProvider()),
@@ -99,6 +101,19 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('dreamfx.buildFile', () => run('build', 'file')),
 		vscode.commands.registerCommand('dreamfx.buildAll', () => run('build', 'all')),
 		vscode.commands.registerCommand('dreamfx.refreshIndex', () => refreshIndex()),
+		// The quiet form of verify: no terminal, results straight into Problems. The task-based
+		// `verifyFile` stays, because when a run misbehaves you want to see it happen.
+		vscode.commands.registerCommand('dreamfx.verifyFileNow', async () => {
+			const document = activeSourceDocument();
+			if (!document || document.uri.scheme !== 'file') {
+				void vscode.window.showErrorMessage('DreamFXLang: open a .dfs/.dfe/.dfm file first.');
+				return;
+			}
+			if (document.isDirty) {
+				await document.save();
+			}
+			verifier.enqueue(document.uri.fsPath);
+		}),
 		vscode.commands.registerCommand('dreamfx.showOutput', () => output.show(true)),
 	);
 }

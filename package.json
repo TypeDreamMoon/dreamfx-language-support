@@ -2,7 +2,7 @@
   "name": "dreamfxlang-language-support",
   "displayName": "DreamFXLang Language Support",
   "description": "Language support for DreamFXLang .dfs systems, .dfe emitters and .dfm modules.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "typedreammoon",
   "author": {
     "name": "TypeDreamMoon",
@@ -110,6 +110,11 @@
         "command": "dreamfx.refreshIndex",
         "title": "DreamFXLang: Rebuild Module Index",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "dreamfx.verifyFileNow",
+        "title": "DreamFXLang: Verify Current File (quietly, into Problems)",
+        "icon": "$(check-all)"
       },
       {
         "command": "dreamfx.showOutput",
@@ -224,6 +229,11 @@
           "type": "boolean",
           "default": true,
           "description": "Ask before running build. Build writes packages, and a running Unreal Editor saving the same packages means the later save silently wins."
+        },
+        "dreamfx.verifyOnSave": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Run `dfx verify` when a source is saved, putting the result in Problems. Reads only — no packages are written, and only one engine runs at a time.\n\n**Off by default because it is expensive, not because it is unfinished:** every `dfx` call boots the Unreal Editor. Measured on the reference project, one file takes about 13 seconds, nearly all of it boot — tolerable for a deliberate pass, too slow to sit behind every save while iterating. It becomes cheap once the extension can talk to an editor that is already running."
         }
       }
     }

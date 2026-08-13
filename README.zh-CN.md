@@ -1,6 +1,6 @@
 # DreamFXLang Language Support
 
-[![version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
 [![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -24,6 +24,7 @@
 | **代码片段** | 26 个骨架:各类文档、栈、`OnEvent`、`Stage`、渲染器、`curve { }`、`hlsl { }`、`Bind`、`disabled`、`as`、`@version`、`#Region` |
 | **新建文件** | `DreamFXLang: New Source File` —— 选类型、填资产名,得到一个**能直接 build 过**的文件 |
 | **任务与 Problems** | `verify` / `lint` / `build`,命令或任务两种入口,每个 `DFXnnnn` 带行列落进 Problems 面板,可点击跳转 |
+| **保存即校验** | 需开启(`dreamfx.verifyOnSave`):保存时跑 `dfx verify`,结果直接进 Problems,**同时只跑一个引擎**。默认关闭的原因见[下文](#保存即校验) |
 
 ## 有意不做什么
 
@@ -46,9 +47,9 @@
 pwsh -File .skill/dfx.ps1 index
 ```
 
-或者命令面板里的 **`DreamFXLang: Rebuild Module Index`**。本项目实测 **571 个模块、约 8 秒**。
-它是**命令**而不是自动行为:每次 `dfx` 调用都要 boot 一次 Unreal 编辑器 —— 几十秒,
-而任何由「打字」触发的东西都付不起这个代价。
+或者命令面板里的 **`DreamFXLang: Rebuild Module Index`**。本项目实测 **571 个模块**,
+引擎 boot 约 13 秒之后再干约 8 秒的活。它是**命令**而不是自动行为:
+任何由「打字」触发的东西都付不起这个代价。
 
 为什么是文件而不是写死的表:DreamFX 的模块是**运行时从资产注册表发现的**。装了 NiagaraFluids
 就多一族,换个项目就换一套。写进扩展里的表**第一天就是错的**。
@@ -56,12 +57,23 @@ pwsh -File .skill/dfx.ps1 index
 索引记录了引擎路径与已启用插件列表,因为正是这两样让它失效。目前**没有任何东西去比对它们** ——
 那需要一个活着的编辑器来比 —— 所以状态栏只显示索引是什么时候生成的,重建是一次点击。
 
+## 保存即校验
+
+打开 `dreamfx.verifyOnSave`,保存源码就会对它跑一次 `dfx verify`,结果**直接进 Problems** ——
+不开终端、不开任务面板。只读,不写任何包。同一个文件连续保存只排一次队;
+校验进行中到来的保存会**并入同一个队列**,而不是再起一个引擎。
+
+**默认关闭是因为它贵,不是因为它没做完。** 本机实测:单文件 **13 秒**,其中几乎全部是引擎 boot ——
+校验本身不到一秒。这个代价对「认真过一遍某个文件」是合适的,对「一边改一边存」则太慢,
+而且**扩展这边再怎么优化都动不了它**:下限就是那个 boot。
+
+`DreamFXLang: Verify Current File (quietly, into Problems)` 是同一件事的手动入口。
+
 ## 还没做
 
 | | 状态 |
 | --- | --- |
-| 保存即校验 | 计划中 |
-| 与运行中 Unreal 编辑器的双向桥(单资产重编、打开资产、从 VSCode 反编译) | 计划中 |
+| 与运行中 Unreal 编辑器的双向桥(单资产重编、打开资产、从 VSCode 反编译) | 计划中 —— **它正是让"保存即校验"变便宜的那一步**,因为引擎已经加载好了 |
 
 ## 安装
 
@@ -88,7 +100,8 @@ npm install && npm run package
 | --- | --- |
 | `DreamFXLang: New Source File` | 从模板创建 `.dfs` / `.dfe` / `.dfm` |
 | `DreamFXLang: Rebuild Module Index` | 重新导出补全所读的模块索引。**只读** |
-| `DreamFXLang: Verify Current File` | 拿源码核对资产。**只读** |
+| `DreamFXLang: Verify Current File` | 拿源码核对资产,开终端看过程。**只读** |
+| `DreamFXLang: Verify Current File (quietly…)` | 同上,但不开终端,结果直接进 Problems。**只读** |
 | `DreamFXLang: Lint Current File` | 风格与一致性警告。**只读** |
 | `DreamFXLang: Build Current File` | 生成资产。**写包** —— 见下 |
 
@@ -117,6 +130,7 @@ npm install && npm run package
 | `dreamfx.powershellPath` | `"pwsh"` | Windows PowerShell 5.1 请填 `powershell` |
 | `dreamfx.syntaxDiagnostics` | `true` | 输入时的实时词法问题 |
 | `dreamfx.confirmBuild` | `true` | 写包类命令执行前先确认 |
+| `dreamfx.verifyOnSave` | `false` | 保存时校验。只读;每次约 13 秒 |
 
 ## 开发
 

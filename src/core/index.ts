@@ -8,7 +8,9 @@
  */
 
 export * from './context';
+export * from './diagnosticLine';
 export * from './scanner';
 export * from './schemaIndex';
 export * from './structure';
 export * from './templates';
+export * from './workQueue';

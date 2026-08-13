@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.0
+
+Phase W4: verify on save.
+
+- `dreamfx.verifyOnSave` runs `dfx verify` when a source is saved and puts the result straight into
+  Problems — no terminal, no task panel. Reads only; no packages are written.
+- `DreamFXLang: Verify Current File (quietly, into Problems)` does the same on demand. The
+  task-based command stays, because when a run misbehaves you want to watch it happen.
+- **One engine at a time, always.** Saving the same file repeatedly queues it once; a save arriving
+  mid-run is picked up by the same drain rather than starting a second engine. That rule lives in a
+  `WorkQueue` in the core package with its own tests, because two engines at once is not a slowdown
+  — it is a machine grinding to a halt, and it would never surface as an error.
+- Diagnostics from a `.dfe` pulled in with `from` land on that file, and are cleared when the file
+  that reported them next verifies clean.
+- The problem-matcher pattern now has exactly one definition. It is read by two things — the task
+  terminal's matcher and this runner, which spawns `dfx` itself and has no terminal to attach a
+  matcher to — and a test asserts the copy in `package.json` still matches the one in code.
+
+### Off by default, and the honest reason
+
+Measured on the reference project: a single-file verify is **13 seconds**, essentially all of it
+engine boot — the check itself is a fraction of a second. That is fine for a deliberate pass over
+one file and much too slow to sit behind every save while iterating, and no amount of work in this
+extension moves it, because the floor is the boot.
+
+So the plan's acceptance target for this phase — *"break a line, save, see the diagnostic in a few
+seconds"* — is **not reachable through the CLI at all**. The machinery here is complete and the
+wiring is real; what it is waiting for is an editor that is already running to talk to. Only the
+`run` method knows a verify means spawning anything, so that swap changes one function.
+
 ## 0.2.0
 
 Phase W3: completion and hover, from the project's real module set.
