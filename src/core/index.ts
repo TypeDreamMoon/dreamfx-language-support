@@ -7,6 +7,7 @@
  * DreamShader ended up with two implementations of its language support.
  */
 
+export * from './assetPath';
 export * from './bridgeProtocol';
 export * from './context';
 export * from './diagnosticLine';

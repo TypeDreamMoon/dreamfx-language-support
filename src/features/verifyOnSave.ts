@@ -26,21 +26,17 @@ import * as vscode from 'vscode';
 import { BridgeDiagnostic, LineSplitter, WorkQueue, parseDiagnosticLine } from '../core';
 import { BridgeClient } from './bridge';
 import { DfxRunner } from './dfx';
+import { ProblemSink } from './problemSink';
 
 /** Long enough that saving twice in a row is one run, short enough not to feel deferred. */
 const DEBOUNCE_MS = 800;
 
 export class VerifyOnSave implements vscode.Disposable {
-	// Its own owner. The task matcher owns `dreamfxlang` and the lexical pass owns
-	// `dreamfxlang-syntax`; sharing an owner would let whichever finished last wipe the others.
-	private readonly collection = vscode.languages.createDiagnosticCollection('dreamfxlang-verify');
 	private readonly status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
 	private readonly disposables: vscode.Disposable[] = [];
 
 	/** One engine at a time, deduplicated by path. The rule that matters; tested in core. */
 	private readonly queue = new WorkQueue<string>((file) => file, (file) => this.run(file));
-	/** Which files each root file's last run reported, so a clean re-run clears them. */
-	private readonly reported = new Map<string, string[]>();
 
 	private timer: NodeJS.Timeout | undefined;
 	/** No process when the editor is doing the work; there is nothing local to kill in that case. */
@@ -50,11 +46,12 @@ export class VerifyOnSave implements vscode.Disposable {
 	constructor(
 		private readonly runner: DfxRunner,
 		private readonly bridge: BridgeClient,
+		private readonly problems: ProblemSink,
 		private readonly output: vscode.OutputChannel,
 	) {
 		this.disposables.push(
 			vscode.workspace.onDidSaveTextDocument((document) => this.onSaved(document)),
-			vscode.workspace.onDidCloseTextDocument((document) => this.collection.delete(document.uri)),
+			vscode.workspace.onDidCloseTextDocument((document) => this.problems.forget(document.uri)),
 		);
 	}
 
@@ -65,7 +62,6 @@ export class VerifyOnSave implements vscode.Disposable {
 		}
 		this.active?.process?.kill();
 		this.status.dispose();
-		this.collection.dispose();
 		for (const disposable of this.disposables) {
 			disposable.dispose();
 		}
@@ -102,42 +98,12 @@ export class VerifyOnSave implements vscode.Disposable {
 		this.updateStatus();
 	}
 
-	/**
-	 * Publishes one run's diagnostics, clearing whatever the previous run of this file reported.
-	 *
-	 * Both transports land here. Two sources, one presentation -- and, more to the point, one place
-	 * that knows a fixed problem has to be cleared, including one in a `.dfe` this file pulls in.
-	 */
-	private publish(file: string, found: Map<string, vscode.Diagnostic[]>, ok: boolean, note: string): void {
-		for (const previous of this.reported.get(file) ?? []) {
-			this.collection.delete(vscode.Uri.file(previous));
-		}
-		for (const [target, diagnostics] of found) {
-			this.collection.set(vscode.Uri.file(target), diagnostics);
-		}
-		this.reported.set(file, [...found.keys()]);
-
-		const total = [...found.values()].reduce((sum, list) => sum + list.length, 0);
+	/** Both transports produce the same shape, so both clear stale problems the same way. */
+	private publish(file: string, found: readonly BridgeDiagnostic[], ok: boolean, source: string, note: string): void {
+		const total = this.problems.publish(file, found, source);
 		this.output.appendLine(`verify: ${path.basename(file)} ${note}, ${total} diagnostic(s)`);
 		this.lastResult = { file, total, ok };
 		this.updateStatus();
-	}
-
-	private toDiagnostic(
-		severity: 'error' | 'warning' | 'info', line: number, column: number,
-		message: string, code: string, source: string,
-	): vscode.Diagnostic {
-		const diagnostic = new vscode.Diagnostic(
-			new vscode.Range(
-				Math.max(0, line - 1), Math.max(0, column - 1),
-				Math.max(0, line - 1), Number.MAX_SAFE_INTEGER),
-			message,
-			severity === 'error' ? vscode.DiagnosticSeverity.Error
-				: severity === 'warning' ? vscode.DiagnosticSeverity.Warning
-					: vscode.DiagnosticSeverity.Information);
-		diagnostic.source = source;
-		diagnostic.code = code;
-		return diagnostic;
 	}
 
 	/**
@@ -167,23 +133,8 @@ export class VerifyOnSave implements vscode.Disposable {
 			return false;
 		}
 
-		const found = new Map<string, vscode.Diagnostic[]>();
-		for (const diagnostic of response.diagnostics as BridgeDiagnostic[]) {
-			const resolved = path.isAbsolute(diagnostic.file)
-				? diagnostic.file
-				: path.resolve(path.dirname(file), diagnostic.file);
-			const entry = this.toDiagnostic(
-				diagnostic.severity, diagnostic.line, diagnostic.column,
-				diagnostic.message, diagnostic.code, 'dfx verify (editor)');
-			const bucket = found.get(resolved);
-			if (bucket) {
-				bucket.push(entry);
-			} else {
-				found.set(resolved, [entry]);
-			}
-		}
-
-		this.publish(file, found, response.ok, `via editor in ${response.durationMs} ms`);
+		this.publish(file, response.diagnostics, response.ok,
+			'dfx verify (editor)', `via editor in ${response.durationMs} ms`);
 		return true;
 	}
 
@@ -209,36 +160,15 @@ export class VerifyOnSave implements vscode.Disposable {
 		this.updateStatus();
 		this.output.appendLine(`verify-on-save: ${path.basename(file)}`);
 
-		const found = new Map<string, vscode.Diagnostic[]>();
+		// Parsed into the same shape the bridge returns, so exactly one piece of code turns a
+		// diagnostic into a Problems entry regardless of which route produced it.
+		const found: BridgeDiagnostic[] = [];
 		const splitter = new LineSplitter();
 
 		const consume = (line: string): void => {
 			const parsed = parseDiagnosticLine(line);
-			if (!parsed) {
-				return;
-			}
-
-			// The path a diagnostic prints is the one the compiler was given: absolute for a run
-			// driven by file, but a `from` reference reports the referenced file's own path, so it
-			// is resolved against the file being verified rather than assumed.
-			const resolved = path.isAbsolute(parsed.file) ? parsed.file : path.resolve(path.dirname(file), parsed.file);
-
-			const diagnostic = new vscode.Diagnostic(
-				new vscode.Range(
-					Math.max(0, parsed.line - 1), Math.max(0, parsed.column - 1),
-					Math.max(0, parsed.line - 1), Number.MAX_SAFE_INTEGER),
-				parsed.message,
-				parsed.severity === 'error' ? vscode.DiagnosticSeverity.Error
-					: parsed.severity === 'warning' ? vscode.DiagnosticSeverity.Warning
-						: vscode.DiagnosticSeverity.Information);
-			diagnostic.source = 'dfx verify';
-			diagnostic.code = parsed.code;
-
-			const bucket = found.get(resolved);
-			if (bucket) {
-				bucket.push(diagnostic);
-			} else {
-				found.set(resolved, [diagnostic]);
+			if (parsed) {
+				found.push(parsed);
 			}
 		};
 
@@ -264,7 +194,7 @@ export class VerifyOnSave implements vscode.Disposable {
 			return;
 		}
 
-		this.publish(file, found, code === 0, `via CLI, exit ${code}`);
+		this.publish(file, found, code === 0, 'dfx verify', `via CLI, exit ${code}`);
 	}
 
 	private lastResult: { file: string; total: number; ok: boolean } | undefined;

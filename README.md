@@ -1,6 +1,6 @@
 # DreamFXLang Language Support
 
-[![version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
 [![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -24,7 +24,8 @@ English | [简体中文](README.zh-CN.md)
 | **Snippets** | 26 skeletons: documents, stacks, `OnEvent`, `Stage`, renderers, `curve { }`, `hlsl { }`, `Bind`, `disabled`, `as`, `@version`, `#Region` |
 | **New file** | `DreamFXLang: New Source File` — pick a kind, name the asset, get a file that builds |
 | **Tasks and Problems** | `verify` / `lint` / `build`, as commands or tasks, with every `DFXnnnn` landing in the Problems panel as a clickable entry |
-| **Verify on save** | Opt-in (`dreamfx.verifyOnSave`): saving a source runs `dfx verify` and puts the result in Problems, one engine at a time. See [below](#verify-on-save) for why it is off by default |
+| **Verify on save** | Opt-in (`dreamfx.verifyOnSave`): saving a source runs `verify` and puts the result in Problems, one engine at a time |
+| **Editor bridge** | With the Unreal Editor open, `verify` and `build` are handed to it instead of booting a second engine — **half a second instead of thirteen**. Plus open the asset a file builds, re-export it, or adopt it. See [below](#the-editor-bridge) |
 
 ## What it deliberately does not do
 
@@ -70,18 +71,53 @@ straight into Problems — no terminal, no task panel. It reads only; no package
 the same file repeatedly queues it once, and a save arriving while a check is running joins the same
 queue rather than starting a second engine.
 
-**It is off by default because it is expensive, not because it is unfinished.** Measured here, one
-file takes **13 seconds**, essentially all of it engine boot — the check itself is a fraction of a
-second. That is fine for a deliberate pass over a file and much too slow to sit behind every save
-while iterating, and nothing in this extension can move it: the floor is the boot.
+**Off by default, because what it costs depends on whether the editor is open.** Through the CLI a
+single file takes about **13 seconds**, essentially all of it engine boot. Through a running editor
+it is under **half a second** — so if you keep the editor open, turn this on.
 
 `DreamFXLang: Verify Current File (quietly, into Problems)` runs the same thing on demand.
+
+## The editor bridge
+
+When the Unreal Editor has the project open, `verify` and `build` are handed to it rather than
+booting a second engine. Measured against a live editor:
+
+| | bridge | CLI |
+| --- | --- | --- |
+| ping | 113 ms | — |
+| verify, clean file | **324 ms** | 13,000 ms |
+| verify, two errors | **539 ms** | 13,000 ms |
+| build, one system | **1,255 ms** | 13,000 ms + build |
+
+**Routing is not a preference.** `dfx build` writes packages and so does a running editor; when both
+save the same package the later save silently wins and the earlier work is gone with no error
+anywhere. With an editor up the bridge is not the faster route, it is the only correct one — which
+is why the write-conflict warning appears on the CLI route and not on this one.
+
+It works through files in `<Project>/Saved/DreamFX/Bridge/`, so there is no port to pick and no
+firewall prompt, and it needs the plugin's `FBridgeService`. Without it nothing changes: no
+`status.json` means no editor, and every command takes the CLI route it always did.
+
+The status bar shows which route the next command will take. **Editor Bridge Status** pings it.
+
+### Limits, stated
+
+- **Signatures are not probed over the bridge.** Probing walks module graphs, and one piece of
+  engine content recurses until the process dies of a stack overflow — survivable for a supervised
+  CLI run, fatal for your editor. `Rebuild Module Index` with the editor open gets you the module
+  list; run `dfx index` for the input signatures, and completion says so rather than offering an
+  empty argument list.
+- **One editor per project.** Two would race for the same requests. Two editors on one project is
+  already an unsupported state, so this is stated rather than defended against.
+- **A request written while no editor was listening is discarded, not queued.** By the time one
+  starts, whoever sent it has timed out and moved on — and executing a stale `build` at startup
+  would write packages nobody asked for.
 
 ## Not yet
 
 | | Status |
 | --- | --- |
-| Two-way bridge to a running Unreal Editor (single-asset rebuild, open asset, decompile from VSCode) | planned — and it is what makes verify-on-save affordable, because the engine is already loaded |
+| Marketplace publishing | deferred — releases ship a `.vsix` |
 
 ## Install
 
@@ -112,6 +148,10 @@ Commands (`Ctrl+Shift+P`):
 | `DreamFXLang: Verify Current File` | Check the file against its asset. **Reads only** |
 | `DreamFXLang: Lint Current File` | Style and consistency warnings. **Reads only** |
 | `DreamFXLang: Build Current File` | Generate the asset. **Writes packages** — see below |
+| `DreamFXLang: Open the Asset This File Builds` | Opens it in the editor. Needs the bridge |
+| `DreamFXLang: Re-export This Asset to Source` | Decompile it again. Needs the bridge |
+| `DreamFXLang: Adopt This Asset` | Make the text the source of truth. Needs the bridge |
+| `DreamFXLang: Editor Bridge Status` | Which route commands take, and a ping |
 
 `verify` and `build` are also contributed as tasks, so `tasks.json` can bind them to a key or run
 them as the default build task:
@@ -120,18 +160,21 @@ them as the default build task:
 { "type": "dreamfx", "command": "verify", "scope": "all" }
 ```
 
-### Build writes packages, so it asks first
+### Build writes packages, so the CLI route asks first
 
 If the Unreal Editor has the project open, both it and `dfx` save the same packages, and the one
-that saves second silently wins. That is why `build` is never automatic, never on save, and shows a
-modal warning by default. `verify` and `lint` write nothing and are safe at any time.
+that saves second silently wins. That is why a CLI `build` is never automatic, never on save, and
+shows a modal warning by default. `verify` and `lint` write nothing and are safe at any time.
 
-Answering *"Run anyway"* is a real answer: an editor being open is not the same as that editor
-having *this* project open, which is why the CLI itself warns rather than refuses. Turn the prompt
-off with `dreamfx.confirmBuild` once that distinction stops mattering to you.
+The bridge route does not ask, because there is no second writer to ask about: the editor is doing
+the saving itself.
 
-Note also that every `dfx` invocation boots the engine, which takes tens of seconds. Nothing here is
-triggered by typing.
+Answering *"Run anyway"* on the CLI route is a real answer — an editor being open is not the same
+as that editor having *this* project open, which is why the CLI itself warns rather than refuses.
+Turn the prompt off with `dreamfx.confirmBuild` once that distinction stops mattering to you.
+
+Note also that a CLI invocation boots the engine, around 13 seconds. Nothing here is triggered by
+typing.
 
 ## Settings
 

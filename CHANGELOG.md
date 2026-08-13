@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0
+
+Phase W6: the editor bridge.
+
+When the Unreal Editor has the project open, `verify` and `build` are handed to it instead of
+booting a second engine. Measured against a live editor:
+
+| | bridge | CLI |
+| --- | --- | --- |
+| ping | 113 ms | — |
+| verify, clean file | **324 ms** | 13,000 ms |
+| verify, two errors | **539 ms** | 13,000 ms |
+| build, one system | **1,255 ms** | 13,000 ms + build |
+
+That settles the target 0.3.0 said was unreachable: break a line, save, and the diagnostic is
+there in half a second.
+
+- **Routing is not a preference.** `dfx build` writes packages and so does a running editor; when
+  both save the same package the later save silently wins. With an editor up the bridge is the
+  only correct route — which is why the write-conflict warning is skipped on it and kept on the
+  CLI, where the hazard is real.
+- **Liveness uses the process id, not just the heartbeat.** A crash leaves the last heartbeat
+  looking perfectly healthy; a process that no longer exists is proof. Neither alone: pids get
+  recycled. `busy` suspends the heartbeat rule entirely, because a build blocks the game thread
+  and stops the heartbeat with it.
+- New commands: **Open the Asset This File Builds**, **Re-export This Asset to Source**, **Adopt
+  This Asset**, **Editor Bridge Status**. The asset is derived from the file's own
+  `Name=`/`Root=` header — `Root="Plugin.DreamFX"` mounts at `/DreamFX/`.
+- A status bar item shows which route the next command takes, because the two are not fast and
+  slow versions of the same thing.
+- Diagnostics from both routes go through one publisher, so a fixed problem is cleared exactly
+  once no matter which route found it — including one in a `.dfe` pulled in with `from`.
+- `lint` stays on the CLI. The bridge has no lint action, and one that fell back silently would
+  make the two routes disagree about what was checked.
+
+Needs the plugin at the commit that adds `FBridgeService`. Without it nothing changes: no
+`status.json` means no editor, and every command takes the CLI route it always did.
+
 ## 0.3.0
 
 Phase W4: verify on save.

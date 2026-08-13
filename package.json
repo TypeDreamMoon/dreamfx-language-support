@@ -2,7 +2,7 @@
   "name": "dreamfxlang-language-support",
   "displayName": "DreamFXLang Language Support",
   "description": "Language support for DreamFXLang .dfs systems, .dfe emitters and .dfm modules.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "typedreammoon",
   "author": {
     "name": "TypeDreamMoon",
@@ -118,6 +118,19 @@
         "icon": "$(check-all)"
       },
       {
+        "command": "dreamfx.openAsset",
+        "title": "DreamFXLang: Open the Asset This File Builds (needs the editor)",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "dreamfx.decompileAsset",
+        "title": "DreamFXLang: Re-export This Asset to Source (needs the editor)"
+      },
+      {
+        "command": "dreamfx.adoptAsset",
+        "title": "DreamFXLang: Adopt This Asset (needs the editor)"
+      },
+      {
         "command": "dreamfx.bridgeStatus",
         "title": "DreamFXLang: Editor Bridge Status",
         "icon": "$(plug)"
@@ -138,6 +151,11 @@
           "command": "dreamfx.buildFile",
           "when": "resourceLangId == dreamfxlang",
           "group": "navigation@2"
+        },
+        {
+          "command": "dreamfx.openAsset",
+          "when": "resourceLangId == dreamfxlang && resourceExtname != .dfe",
+          "group": "navigation@3"
         }
       ],
       "editor/context": [
