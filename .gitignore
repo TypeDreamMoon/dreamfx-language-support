@@ -3,3 +3,6 @@ out/
 *.vsix
 *.log
 .vscode-test/
+
+# Throwaway bridge probes written beside the package during testing.
+.bridgeprobe*.js

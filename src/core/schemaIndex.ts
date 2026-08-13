@@ -48,6 +48,18 @@ export interface SchemaIndex {
 	/** Part of the fingerprint: enabling a content plugin adds a family of modules. */
 	plugins?: string[];
 	searchPaths?: string[];
+	/**
+	 * Whether the signatures were probed at all.
+	 *
+	 * False for an index the editor bridge produced: probing walks the module graphs, and one piece of
+	 * engine content recurses without bound until the process dies of a stack overflow -- survivable
+	 * for a supervised CLI run, fatal for somebody's editor. Absent on an index written before this
+	 * existed, which was always a probed one, so undefined reads as true.
+	 *
+	 * It matters because "no inputs" and "not looked at" are the same shape in the file otherwise, and
+	 * offering an empty argument list as if it were the answer is worse than saying nothing.
+	 */
+	inputsProbed?: boolean;
 	modules: IndexedModule[];
 }
 
@@ -71,6 +83,17 @@ export class ModuleIndex {
 
 	get modules(): readonly IndexedModule[] {
 		return this.source.modules;
+	}
+
+	/**
+	 * Whether this index can answer "what inputs does this module take?".
+	 *
+	 * Module-name completion works either way -- that comes from the stack lists, which cost nothing
+	 * to collect. Argument-name completion does not, and the difference has to be visible rather than
+	 * presenting as a module that happens to take no inputs.
+	 */
+	get hasSignatures(): boolean {
+		return this.source.inputsProbed !== false;
 	}
 
 	/**

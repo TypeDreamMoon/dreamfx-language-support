@@ -54,6 +54,21 @@ export class DreamFXCompletionProvider implements vscode.CompletionItemProvider 
 
 	private completeInputNames(index: ModuleIndex, context: EditContext & { kind: 'argumentName' }): vscode.CompletionItem[] {
 		const module = index.resolveUnique(context.module);
+
+		// An index built by the editor bridge carries no signatures, because probing them can crash
+		// the editor. Saying so beats an empty list: silence here is indistinguishable from "this
+		// module takes no inputs", and the author would go looking for the wrong problem.
+		if (!index.hasSignatures) {
+			const hint = new vscode.CompletionItem(
+				'Input names need a full index', vscode.CompletionItemKind.Issue);
+			hint.detail = 'run DreamFXLang: Rebuild Module Index';
+			hint.documentation = new vscode.MarkdownString(
+				'This index was written by the running Unreal Editor, which lists modules but does not probe their input signatures — probing can crash the editor, so it is a `dfx index` job.\n\nRun **DreamFXLang: Rebuild Module Index** to get argument completion back.');
+			hint.insertText = '';
+			hint.sortText = '￿';
+			return [hint];
+		}
+
 		if (!module?.inputs) {
 			return [];
 		}
