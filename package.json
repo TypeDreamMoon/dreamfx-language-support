@@ -118,6 +118,11 @@
         "icon": "$(check-all)"
       },
       {
+        "command": "dreamfx.bridgeStatus",
+        "title": "DreamFXLang: Editor Bridge Status",
+        "icon": "$(plug)"
+      },
+      {
         "command": "dreamfx.showOutput",
         "title": "DreamFXLang: Show Output Channel"
       }

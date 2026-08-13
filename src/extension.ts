@@ -12,6 +12,8 @@ import { DreamFXCompletionProvider, DreamFXHoverProvider } from './features/comp
 import { DfxCommand, DfxRunner, DfxScope, DfxTaskProvider, TASK_TYPE, activeSourceDocument } from './features/dfx';
 import { SyntaxDiagnostics } from './features/diagnostics';
 import { SchemaIndexCache, describeIndex } from './features/indexCache';
+import { BridgeClient } from './features/bridge';
+import { BridgeStatusBar } from './features/bridgeStatusBar';
 import { newSourceFile } from './features/newFile';
 import { DreamFXDocumentSymbolProvider } from './features/symbols';
 import { VerifyOnSave } from './features/verifyOnSave';
@@ -23,9 +25,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(output);
 
 	const runner = new DfxRunner(output);
+	const bridge = new BridgeClient(output);
 	const indexCache = new SchemaIndexCache(output);
-	const verifier = new VerifyOnSave(runner, output);
-	context.subscriptions.push(indexCache, verifier);
+	const verifier = new VerifyOnSave(runner, bridge, output);
+	const bridgeStatusBar = new BridgeStatusBar(bridge);
+	context.subscriptions.push(indexCache, verifier, bridgeStatusBar);
 
 	context.subscriptions.push(
 		vscode.languages.registerDocumentSymbolProvider(LANGUAGE_SELECTOR, new DreamFXDocumentSymbolProvider()),
@@ -113,6 +117,27 @@ export function activate(context: vscode.ExtensionContext): void {
 				await document.save();
 			}
 			verifier.enqueue(document.uri.fsPath);
+		}),
+		vscode.commands.registerCommand('dreamfx.bridgeStatus', async () => {
+			const document = activeSourceDocument();
+			const projectDir = document && document.uri.scheme === 'file'
+				? bridge.findProjectDir(document.uri.fsPath)
+				: undefined;
+			if (!projectDir) {
+				void vscode.window.showInformationMessage('DreamFXLang: open a source file inside an Unreal project first.');
+				return;
+			}
+			bridgeStatusBar.refresh();
+			const choice = await vscode.window.showInformationMessage(
+				bridge.describe(projectDir), 'Ping editor', 'Show output');
+			if (choice === 'Show output') {
+				output.show(true);
+			} else if (choice === 'Ping editor') {
+				const { response, error } = await bridge.send(projectDir, 'ping', {}, 5000);
+				void vscode.window.showInformationMessage(
+					response ? `Editor answered in ${response.durationMs} ms.` : `No answer: ${error}`);
+				bridgeStatusBar.refresh();
+			}
 		}),
 		vscode.commands.registerCommand('dreamfx.showOutput', () => output.show(true)),
 	);

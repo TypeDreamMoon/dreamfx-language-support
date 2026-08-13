@@ -23,7 +23,8 @@ import { ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import { LineSplitter, WorkQueue, parseDiagnosticLine } from '../core';
+import { BridgeDiagnostic, LineSplitter, WorkQueue, parseDiagnosticLine } from '../core';
+import { BridgeClient } from './bridge';
 import { DfxRunner } from './dfx';
 
 /** Long enough that saving twice in a row is one run, short enough not to feel deferred. */
@@ -42,10 +43,15 @@ export class VerifyOnSave implements vscode.Disposable {
 	private readonly reported = new Map<string, string[]>();
 
 	private timer: NodeJS.Timeout | undefined;
-	private active: { file: string; process: ChildProcess } | undefined;
+	/** No process when the editor is doing the work; there is nothing local to kill in that case. */
+	private active: { file: string; process?: ChildProcess } | undefined;
 	private disposed = false;
 
-	constructor(private readonly runner: DfxRunner, private readonly output: vscode.OutputChannel) {
+	constructor(
+		private readonly runner: DfxRunner,
+		private readonly bridge: BridgeClient,
+		private readonly output: vscode.OutputChannel,
+	) {
 		this.disposables.push(
 			vscode.workspace.onDidSaveTextDocument((document) => this.onSaved(document)),
 			vscode.workspace.onDidCloseTextDocument((document) => this.collection.delete(document.uri)),
@@ -57,7 +63,7 @@ export class VerifyOnSave implements vscode.Disposable {
 		if (this.timer) {
 			clearTimeout(this.timer);
 		}
-		this.active?.process.kill();
+		this.active?.process?.kill();
 		this.status.dispose();
 		this.collection.dispose();
 		for (const disposable of this.disposables) {
@@ -96,7 +102,96 @@ export class VerifyOnSave implements vscode.Disposable {
 		this.updateStatus();
 	}
 
+	/**
+	 * Publishes one run's diagnostics, clearing whatever the previous run of this file reported.
+	 *
+	 * Both transports land here. Two sources, one presentation -- and, more to the point, one place
+	 * that knows a fixed problem has to be cleared, including one in a `.dfe` this file pulls in.
+	 */
+	private publish(file: string, found: Map<string, vscode.Diagnostic[]>, ok: boolean, note: string): void {
+		for (const previous of this.reported.get(file) ?? []) {
+			this.collection.delete(vscode.Uri.file(previous));
+		}
+		for (const [target, diagnostics] of found) {
+			this.collection.set(vscode.Uri.file(target), diagnostics);
+		}
+		this.reported.set(file, [...found.keys()]);
+
+		const total = [...found.values()].reduce((sum, list) => sum + list.length, 0);
+		this.output.appendLine(`verify: ${path.basename(file)} ${note}, ${total} diagnostic(s)`);
+		this.lastResult = { file, total, ok };
+		this.updateStatus();
+	}
+
+	private toDiagnostic(
+		severity: 'error' | 'warning' | 'info', line: number, column: number,
+		message: string, code: string, source: string,
+	): vscode.Diagnostic {
+		const diagnostic = new vscode.Diagnostic(
+			new vscode.Range(
+				Math.max(0, line - 1), Math.max(0, column - 1),
+				Math.max(0, line - 1), Number.MAX_SAFE_INTEGER),
+			message,
+			severity === 'error' ? vscode.DiagnosticSeverity.Error
+				: severity === 'warning' ? vscode.DiagnosticSeverity.Warning
+					: vscode.DiagnosticSeverity.Information);
+		diagnostic.source = source;
+		diagnostic.code = code;
+		return diagnostic;
+	}
+
+	/**
+	 * Verify through the editor, when there is one.
+	 *
+	 * This is what makes verify-on-save affordable at all. Through the CLI it costs a 13-second engine
+	 * boot per save, which is why the feature ships off by default; through an editor that is already
+	 * loaded it costs what the check costs. Returns false when there is no editor to ask, and the
+	 * caller falls back.
+	 */
+	private async runViaBridge(file: string): Promise<boolean> {
+		const projectDir = this.bridge.findProjectDir(file);
+		if (!projectDir || this.bridge.route(projectDir) !== 'bridge') {
+			return false;
+		}
+
+		this.active = { file, process: undefined };
+		this.updateStatus();
+
+		const { response, error } = await this.bridge.send(projectDir, 'verify', { scope: 'file', sourceFile: file });
+		this.active = undefined;
+
+		if (!response) {
+			// Not a silent fallback: the editor was there and did not answer, which is worth saying
+			// before spending 13 seconds doing it the other way.
+			this.output.appendLine(`verify: bridge failed (${error ?? 'no response'}); falling back to the CLI.`);
+			return false;
+		}
+
+		const found = new Map<string, vscode.Diagnostic[]>();
+		for (const diagnostic of response.diagnostics as BridgeDiagnostic[]) {
+			const resolved = path.isAbsolute(diagnostic.file)
+				? diagnostic.file
+				: path.resolve(path.dirname(file), diagnostic.file);
+			const entry = this.toDiagnostic(
+				diagnostic.severity, diagnostic.line, diagnostic.column,
+				diagnostic.message, diagnostic.code, 'dfx verify (editor)');
+			const bucket = found.get(resolved);
+			if (bucket) {
+				bucket.push(entry);
+			} else {
+				found.set(resolved, [entry]);
+			}
+		}
+
+		this.publish(file, found, response.ok, `via editor in ${response.durationMs} ms`);
+		return true;
+	}
+
 	private async run(file: string): Promise<void> {
+		if (await this.runViaBridge(file)) {
+			return;
+		}
+
 		const script = await this.runner.findScript();
 		if (!script) {
 			this.output.appendLine('verify-on-save: no .skill/dfx.ps1 found; nothing to run.');
@@ -169,20 +264,7 @@ export class VerifyOnSave implements vscode.Disposable {
 			return;
 		}
 
-		// Clear what the previous run of THIS file reported before publishing the new set, so a
-		// diagnostic that has been fixed disappears -- including one in a `.dfe` this file pulls in.
-		for (const previous of this.reported.get(file) ?? []) {
-			this.collection.delete(vscode.Uri.file(previous));
-		}
-		for (const [target, diagnostics] of found) {
-			this.collection.set(vscode.Uri.file(target), diagnostics);
-		}
-		this.reported.set(file, [...found.keys()]);
-
-		const total = [...found.values()].reduce((sum, list) => sum + list.length, 0);
-		this.output.appendLine(`verify-on-save: ${path.basename(file)} exit ${code}, ${total} diagnostic(s)`);
-		this.lastResult = { file, total, ok: code === 0 };
-		this.updateStatus();
+		this.publish(file, found, code === 0, `via CLI, exit ${code}`);
 	}
 
 	private lastResult: { file: string; total: number; ok: boolean } | undefined;
