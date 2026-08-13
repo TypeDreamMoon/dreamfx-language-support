@@ -166,7 +166,7 @@ test('every menu entry names a contributed command', () => {
 test('the task definition covers exactly the commands the runner knows', () => {
 	const definition = packageJson.contributes.taskDefinitions.find((entry: any) => entry.type === 'dreamfx');
 	assert.ok(definition);
-	assert.deepEqual(definition.properties.command.enum, ['verify', 'lint', 'build']);
+	assert.deepEqual(definition.properties.command.enum, ['verify', 'lint', 'build', 'index']);
 	assert.deepEqual(definition.properties.scope.enum, ['file', 'all']);
 	assert.deepEqual(definition.required, ['command']);
 });

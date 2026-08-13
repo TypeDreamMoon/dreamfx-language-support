@@ -1,6 +1,6 @@
 # DreamFXLang Language Support
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
 [![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -19,6 +19,8 @@
 | **大纲** | 文档 → emitter → 栈 / 段落 / 渲染器 → 模块调用与声明,在 Outline、面包屑与 `Ctrl+Shift+O` 中可用 |
 | **折叠** | 花括号,外加 `#Region` / `#EndRegion` |
 | **实时语法错误** | 未闭合的字符串、块注释、反引号名、原始块,非法字符,未闭合的块 —— 用**编译器自己的 DFX1xxx 码**报出,并链到它的文档 |
+| **补全** | 先按**当前所在的栈**过滤出模块名,再补该模块的**真实输入名**,再补枚举值 —— 全部来自项目**实际可用**的模块集,不是写死的表 |
+| **Hover** | 模块的说明、可用栈与完整签名;输入的类型、枚举值、是否接受表达式 |
 | **代码片段** | 26 个骨架:各类文档、栈、`OnEvent`、`Stage`、渲染器、`curve { }`、`hlsl { }`、`Bind`、`disabled`、`as`、`@version`、`#Region` |
 | **新建文件** | `DreamFXLang: New Source File` —— 选类型、填资产名,得到一个**能直接 build 过**的文件 |
 | **任务与 Problems** | `verify` / `lint` / `build`,命令或任务两种入口,每个 `DFXnnnn` 带行列落进 Problems 面板,可点击跳转 |
@@ -36,12 +38,28 @@
 因为那 40 个全部是**语义**失败;而 73 个真实源码(含第三方内容的反编译镜像)同样报出零个,
 并且每一个的结构都被正确识别。
 
+## 模块索引
+
+补全与 hover 读的是插件导出的 `DFX/.dfx-index.json`:
+
+```bash
+pwsh -File .skill/dfx.ps1 index
+```
+
+或者命令面板里的 **`DreamFXLang: Rebuild Module Index`**。本项目实测 **571 个模块、约 8 秒**。
+它是**命令**而不是自动行为:每次 `dfx` 调用都要 boot 一次 Unreal 编辑器 —— 几十秒,
+而任何由「打字」触发的东西都付不起这个代价。
+
+为什么是文件而不是写死的表:DreamFX 的模块是**运行时从资产注册表发现的**。装了 NiagaraFluids
+就多一族,换个项目就换一套。写进扩展里的表**第一天就是错的**。
+
+索引记录了引擎路径与已启用插件列表,因为正是这两样让它失效。目前**没有任何东西去比对它们** ——
+那需要一个活着的编辑器来比 —— 所以状态栏只显示索引是什么时候生成的,重建是一次点击。
+
 ## 还没做
 
 | | 状态 |
 | --- | --- |
-| 从项目**实际可用**的模块集补全模块名与输入名 | 计划中(需要 `dfx list -Json` / `dfx schema -Json`) |
-| Hover 显示模块签名与可用栈 | 计划中 |
 | 保存即校验 | 计划中 |
 | 与运行中 Unreal 编辑器的双向桥(单资产重编、打开资产、从 VSCode 反编译) | 计划中 |
 
@@ -69,6 +87,7 @@ npm install && npm run package
 | 命令 | |
 | --- | --- |
 | `DreamFXLang: New Source File` | 从模板创建 `.dfs` / `.dfe` / `.dfm` |
+| `DreamFXLang: Rebuild Module Index` | 重新导出补全所读的模块索引。**只读** |
 | `DreamFXLang: Verify Current File` | 拿源码核对资产。**只读** |
 | `DreamFXLang: Lint Current File` | 风格与一致性警告。**只读** |
 | `DreamFXLang: Build Current File` | 生成资产。**写包** —— 见下 |

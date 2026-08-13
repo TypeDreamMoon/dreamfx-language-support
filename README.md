@@ -1,6 +1,6 @@
 # DreamFXLang Language Support
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
 [![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -19,6 +19,8 @@ English | [简体中文](README.zh-CN.md)
 | **Outline** | Document → emitters → stacks, sections, renderers → module calls and declarations, in the Outline view, breadcrumbs and `Ctrl+Shift+O` |
 | **Folding** | Braces, plus `#Region` / `#EndRegion` |
 | **Live syntax errors** | Unterminated string, block comment, back-quoted name or raw block, an unexpected character, an unclosed block — reported with the compiler's own DFX1xxx codes, linked to its docs |
+| **Completion** | Module names filtered by the stack you are in, then that module's **real input names**, then its enum entries — all from the project's actual module set, not a baked-in table |
+| **Hover** | A module's description, stacks and full signature; an input's type, enum entries and whether it takes an expression |
 | **Snippets** | 26 skeletons: documents, stacks, `OnEvent`, `Stage`, renderers, `curve { }`, `hlsl { }`, `Bind`, `disabled`, `as`, `@version`, `#Region` |
 | **New file** | `DreamFXLang: New Source File` — pick a kind, name the asset, get a file that builds |
 | **Tasks and Problems** | `verify` / `lint` / `build`, as commands or tasks, with every `DFXnnnn` landing in the Problems panel as a clickable entry |
@@ -40,12 +42,30 @@ fails to build — this extension reports exactly zero problems, because all 40 
 Across 73 real sources, including decompiled mirrors of third-party content, it reports zero as
 well, and recognises the structure of every one.
 
+## The module index
+
+Completion and hover read `DFX/.dfx-index.json`, which the plugin exports:
+
+```bash
+pwsh -File .skill/dfx.ps1 index
+```
+
+or **`DreamFXLang: Rebuild Module Index`** from the command palette. On this project that is 571
+modules in about 8 seconds, and it is a command rather than something automatic because every `dfx`
+call boots the Unreal Editor — tens of seconds, which nothing triggered by typing may cost.
+
+Why a file and not a baked-in table: DreamFX resolves modules from the asset registry at runtime.
+Enable NiagaraFluids and a family of modules appears; open a different project and the whole set
+changes. A table written into this extension would be wrong on the first day.
+
+The index records the engine path and the enabled plugin list, because those are what invalidate it.
+Nothing compares them yet — that needs a live editor to compare against — so the status bar shows
+when the index was generated and rebuilding is one click.
+
 ## Not yet
 
 | | Status |
 | --- | --- |
-| Module and input-name completion from the project's real module set | planned (needs `dfx list -Json` / `dfx schema -Json`) |
-| Hover showing a module's signature and which stacks it may sit in | planned |
 | Verify-on-save | planned |
 | Two-way bridge to a running Unreal Editor (single-asset rebuild, open asset, decompile from VSCode) | planned |
 
@@ -74,6 +94,7 @@ Commands (`Ctrl+Shift+P`):
 | Command | |
 | --- | --- |
 | `DreamFXLang: New Source File` | Create a `.dfs` / `.dfe` / `.dfm` from a template |
+| `DreamFXLang: Rebuild Module Index` | Re-export the module index that completion reads. **Reads only** |
 | `DreamFXLang: Verify Current File` | Check the file against its asset. **Reads only** |
 | `DreamFXLang: Lint Current File` | Style and consistency warnings. **Reads only** |
 | `DreamFXLang: Build Current File` | Generate the asset. **Writes packages** — see below |

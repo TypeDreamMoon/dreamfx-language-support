@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.2.0
+
+Phase W3: completion and hover, from the project's real module set.
+
+### Index
+
+- `DreamFXLang: Rebuild Module Index` runs `dfx index`, which exports every module and dynamic input
+  the search paths expose — name, path, category, description, declared stacks and **input
+  signature** — into `DFX/.dfx-index.json`. Measured on this project: 571 modules, 8.1s.
+- The index is read from disk and never derived here. Every `dfx` call boots the Unreal Editor, so
+  nothing that runs while you type may ask it anything.
+- A status bar item shows how many modules are loaded and when the index was generated; clicking it
+  rebuilds.
+
+### Completion
+
+- At statement position in a stack: the modules that stack accepts, with their descriptions.
+- Inside a call: that module's real input names, typed, with static switches sorted first — on a
+  module source order *is* write order, so an input that only exists once a switch is set has to be
+  written after it.
+- After `Input = `: the input's enum entries when it has them, the five parameter namespaces, and
+  every dynamic input valid in the stack.
+- Names already written are dropped from the offer.
+- Works through a dynamic input chain of any depth, through a partial path, through `@version` and
+  through `disabled`.
+- Offers nothing inside `hlsl { }` or a module's `Body = { }` — that is HLSL, not DreamFXLang.
+
+### Hover
+
+- Over a module call: description, the stacks it declares, and its full signature.
+- Over an input name: its type, description, enum entries, and whether it takes an expression.
+- Over an ambiguous short name: every asset it matches, because the compiler refuses rather than
+  picking one (DFX3002).
+
+### The boundary holds
+
+This offers; the build decides. The index is a snapshot and can be stale, so nothing here filters on
+it aggressively and nothing reports an error from it. A module with no recorded stacks is offered
+everywhere rather than nowhere: an empty list means the export could not read the usage bitmask, and
+hiding a module because the *cache* is thin would be the editor inventing a restriction the language
+does not have.
+
+### Found while building it
+
+- **`dfx schema /Niagara/Modules/Masks/ConeMask` crashes the commandlet**, and always has. That
+  module's graph makes the engine's own `UNiagaraGraph::ReferencesStaticVariable` recurse without
+  bound; the stack overflow ends the process. It is stock engine content, so any project hits it. The
+  index walk now records the module it is about to probe and quarantines whatever was still recorded
+  when the next run starts, and `dfx.ps1` re-runs until the walk completes — 2 attempts, 47s here.
+
 ## 0.1.0
 
 First release. Covers phases W0–W2 of the plan: a language you can read, write and check without
@@ -55,9 +105,15 @@ leaving the editor.
 
 ### Found while verifying
 
-A `//` comment inside a **DynamicInput**'s `Body` fails the build. The translator writes the body
-into `Output = (Type)( <body> );`, so the comment swallows the closing paren; it surfaces as an
-empty `DFX6006` — *"Niagara could not compile the body of ...:"* with nothing after the colon —
-which names neither the line nor the reason. The same comment in a **Module** body is fine, because
-a module's body is emitted verbatim and is never wrapped. Both the template and the snippet keep
-their commentary outside the block, and a test asserts they continue to.
+Building the templates for real turned up two defects in the plugin, both since fixed there:
+
+- A `//` comment inside a **DynamicInput**'s `Body` failed the build. The compiler reduces that body
+  to one expression by stripping a leading `return`, and a comment in front of it defeated the test,
+  so the `return` survived into `Out_X = (float)( return ... );`. A **Module** body is emitted
+  verbatim and never wrapped, so the same comment there was always fine. The reduction now strips
+  comments first. The templates and snippets keep their commentary outside the block regardless — a
+  template should not require the newest plugin to build — and a test holds that line.
+- `dfx.ps1` kept only output lines carrying a `LogDreamFX` prefix, which the second and later lines
+  of a multi-line `UE_LOG` do not have. Every multi-line diagnostic therefore reached the terminal
+  truncated to its first line: `DFX6006`, whose entire value is the translator's own error text,
+  arrived ending in a bare colon. The driver now groups output into records before filtering.

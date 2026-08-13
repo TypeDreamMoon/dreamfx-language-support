@@ -2,7 +2,7 @@
   "name": "dreamfxlang-language-support",
   "displayName": "DreamFXLang Language Support",
   "description": "Language support for DreamFXLang .dfs systems, .dfe emitters and .dfm modules.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "typedreammoon",
   "author": {
     "name": "TypeDreamMoon",
@@ -107,6 +107,11 @@
         "title": "DreamFXLang: Build All Sources (writes assets)"
       },
       {
+        "command": "dreamfx.refreshIndex",
+        "title": "DreamFXLang: Rebuild Module Index",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "dreamfx.showOutput",
         "title": "DreamFXLang: Show Output Channel"
       }
@@ -149,9 +154,10 @@
             "enum": [
               "verify",
               "lint",
-              "build"
+              "build",
+              "index"
             ],
-            "description": "Which dfx command to run. verify and lint are read-only; build writes assets."
+            "description": "Which dfx command to run. verify, lint and index are read-only; build writes assets."
           },
           "scope": {
             "type": "string",

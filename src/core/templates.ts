@@ -7,12 +7,16 @@
  * only be *believed* to.
  *
  * All four were then built for real (`dfx build <file> -NoSave`) rather than assumed, which is how
- * the comment that used to sit inside the DynamicInput body was found: a dynamic input's body is
- * wrapped by the Niagara translator as `Output = (Type)( <body> );`, and a `//` comment inside that
- * wrap swallows the closing `);`. It fails as an empty DFX6006 -- "Niagara could not compile the
- * body of ...:" with nothing after the colon -- which names neither the line nor the reason. The
- * same comment in a *Module* body is fine, because a module's body is emitted verbatim and is never
- * wrapped. Hence: nothing but code goes inside a DynamicInput's `Body`, and a test asserts it.
+ * the comment that used to sit inside the DynamicInput body was found: the compiler reduced that
+ * body to one expression by looking for a leading `return` to strip, and a `//` line in front of it
+ * defeated the test -- so the `return` survived into `Out_X = (float)( return ... );`, which is not
+ * an expression. A *Module* body is emitted verbatim and never wrapped, so the same comment there
+ * was always fine.
+ *
+ * Fixed in the plugin as of 2026-08-13: the reduction strips comments first, so a comment in a
+ * DynamicInput body is trivia the way it reads. These templates keep their commentary outside the
+ * block anyway -- a template should not depend on the newest version of the thing it is a template
+ * for -- and a test holds that line.
  */
 
 export type TemplateKind = 'system' | 'emitter' | 'module' | 'dynamicInput';
@@ -173,9 +177,8 @@ export function renderTemplate(request: TemplateRequest): string {
         float Frequency = 6.0;
     }
 
-    // One expression, with or without the return. The body is written into
-    // Output = (Type)( <body> ), so nothing else may go inside it -- not even a // comment, which
-    // would swallow the closing paren. Multi-statement logic belongs in a Module.
+    // One expression, with or without the return: the body is written into
+    // Output = (Type)( <body> ). Multi-statement logic belongs in a Module.
     Body = {
         return 0.5 + 0.5 * sin(Engine.Time * Frequency * 6.2831853);
     }

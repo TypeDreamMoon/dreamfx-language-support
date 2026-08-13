@@ -60,11 +60,11 @@ test('a module template holds statements and a dynamic input template holds one 
 });
 
 test('a DynamicInput body holds the expression and nothing else', () => {
-	// Measured, not guessed: a `//` comment inside this body fails the build. The translator writes
-	// the body into `Output = (Type)( <body> );`, and the comment swallows the closing paren -- which
-	// surfaces as an empty DFX6006 ("Niagara could not compile the body of ...:" with nothing after
-	// the colon), naming neither the line nor the reason. A Module body is emitted verbatim and is
-	// not wrapped, so the same comment there is fine and is asserted to still be allowed.
+	// Measured, not guessed: a `//` comment inside this body used to fail the build. The compiler
+	// reduces the body to one expression by stripping a leading `return`, and a comment in front of
+	// it defeated that test -- so the `return` survived into `Out_X = (float)( return ... );`. The
+	// plugin strips comments first as of 2026-08-13, but a template should not require the newest
+	// plugin to build, so the commentary stays outside the block and this holds that line.
 	const body = bodyOf('dynamicInput');
 	assert.ok(!body.includes('//'), `a comment in a DynamicInput body breaks the build:\n${body}`);
 	assert.ok(!body.includes('/*'), `a comment in a DynamicInput body breaks the build:\n${body}`);

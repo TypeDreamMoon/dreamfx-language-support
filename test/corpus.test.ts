@@ -15,6 +15,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
+import { contextAt } from '../src/core/context';
+import { parseSchemaIndex } from '../src/core/schemaIndex';
 import { analyze } from '../src/core/structure';
 
 const CORPUS = process.env.DREAMFX_CORPUS_DIR;
@@ -40,6 +42,59 @@ test('every known-good source in the corpus scans clean', { skip: CORPUS ? false
 	assert.deepEqual(failures, [], `${failures.length} problems across ${files.length} files (${rootless} unrecognised)`);
 	console.log(`  scanned ${files.length} sources under ${CORPUS}`);
 });
+
+/**
+ * The real index, end to end.
+ *
+ * Everything else about the index is tested against fixtures this file wrote, which proves the
+ * shapes agree with themselves. This one reads what the plugin actually exported -- 500-odd modules
+ * off a real engine -- and asks it the question the completion provider asks.
+ */
+test('the exported index answers a real completion query', { skip: CORPUS ? false : 'DREAMFX_CORPUS_DIR is not set' }, () => {
+	const indexPath = findIndex(CORPUS!);
+	if (!indexPath) {
+		console.log('  no .dfx-index.json under the corpus dir; run `dfx index` to produce one');
+		return;
+	}
+
+	const parsed = parseSchemaIndex(fs.readFileSync(indexPath, 'utf8'));
+	assert.ok('index' in parsed, `index did not load: ${'error' in parsed ? parsed.error : ''}`);
+	const index = parsed.index;
+
+	assert.ok(index.modules.length > 100, `only ${index.modules.length} modules`);
+
+	// A module every Niagara install has, with an input the compiler type-checks against.
+	const gravity = index.resolveUnique('GravityForce');
+	assert.ok(gravity, 'GravityForce did not resolve uniquely');
+	assert.ok(gravity.stacks.includes('ParticleUpdate'));
+	assert.ok(index.findInput(gravity, 'Gravity'), 'GravityForce has no Gravity input in the index');
+
+	// The normalisation that lets a source write an identifier for a spaced Niagara name.
+	const coordinateSpace = index.findInput(gravity, 'CoordinateSpace');
+	assert.ok(coordinateSpace, 'CoordinateSpace did not resolve through the space-insensitive lookup');
+	assert.ok((coordinateSpace.enum ?? []).length > 0, 'an enum input carries no entries');
+
+	// And the whole path: cursor position -> context -> the offer that context produces.
+	const source = 'System(Name="x")\n{\n    Emitter E\n    {\n        ParticleUpdate = {\n            Grav';
+	const context = contextAt(source, source.length);
+	assert.equal(context.kind, 'stackStatement');
+
+	const offered = index.forStack('ParticleUpdate', 'module');
+	assert.ok(offered.some((module) => module.name === 'GravityForce'));
+	assert.ok(!offered.some((module) => module.name === 'EmitterState'),
+		'EmitterState is an emitter-scope module and should not be offered in ParticleUpdate');
+
+	console.log(`  index: ${index.modules.length} modules, ${offered.length} offerable in ParticleUpdate`);
+});
+
+function findIndex(root: string): string | undefined {
+	const direct = path.join(root, 'DFX', '.dfx-index.json');
+	if (fs.existsSync(direct)) {
+		return direct;
+	}
+	const nested = path.join(root, '.dfx-index.json');
+	return fs.existsSync(nested) ? nested : undefined;
+}
 
 function collect(root: string): string[] {
 	const found: string[] = [];

@@ -7,6 +7,8 @@
  * DreamShader ended up with two implementations of its language support.
  */
 
+export * from './context';
 export * from './scanner';
+export * from './schemaIndex';
 export * from './structure';
 export * from './templates';

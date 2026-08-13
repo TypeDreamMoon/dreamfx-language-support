@@ -134,6 +134,48 @@ export class DfxRunner {
 	}
 
 	/**
+	 * The index export.
+	 *
+	 * Not a `DfxCommand` because it is not a check: it reads the module library and writes one JSON
+	 * file, touching no package. Safe with the editor open, and still an explicit command because it
+	 * boots the engine like everything else here.
+	 */
+	async createIndexTask(destination: string, document?: vscode.TextDocument): Promise<vscode.Task | undefined> {
+		const script = await this.findScript(document);
+		if (!script) {
+			void vscode.window.showErrorMessage(
+				'DreamFXLang: could not find .skill/dfx.ps1. Set dreamfx.dfxScriptPath, or open the folder containing the DreamFX plugin.');
+			return undefined;
+		}
+
+		const shell = vscode.workspace.getConfiguration('dreamfx').get<string>('powershellPath', 'pwsh') || 'pwsh';
+		const cwd = this.resolveWorkingDirectory(script, document);
+
+		const execution = new vscode.ProcessExecution(
+			shell,
+			['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, 'index', '-Out', destination],
+			{ cwd });
+
+		const task = new vscode.Task(
+			{ type: TASK_TYPE, command: 'index' } as vscode.TaskDefinition,
+			vscode.TaskScope.Workspace,
+			'rebuild module index',
+			'DreamFXLang',
+			execution,
+			['$dreamfx']);
+
+		task.presentationOptions = {
+			reveal: vscode.TaskRevealKind.Always,
+			panel: vscode.TaskPanelKind.Dedicated,
+			clear: true,
+			showReuseMessage: false,
+		};
+
+		this.output.appendLine(`${shell} -File ${script} index -Out ${destination}   (cwd ${cwd})`);
+		return task;
+	}
+
+	/**
 	 * `dfx.ps1` finds the .uproject by walking up from its target, and from the working directory
 	 * when there is no target -- so `-All` only works when the cwd is inside the project.
 	 */
