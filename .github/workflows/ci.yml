@@ -24,8 +24,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Compile
-        run: npm run compile
+      # Both halves: tsc for the types and the test output, esbuild for the two bundles the editor
+      # loads. The tests need both -- `contributes.test.ts` checks that `main` points at something
+      # that exists, and `serverProtocol.test.ts` spawns the built server and talks LSP to it.
+      - name: Build
+        run: npm run build
 
       - name: Test
         run: node --test out/test/
