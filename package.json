@@ -2,7 +2,7 @@
   "name": "dreamfxlang-language-support",
   "displayName": "DreamFXLang Language Support",
   "description": "Language support for DreamFXLang .dfs systems, .dfe emitters and .dfm modules.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "typedreammoon",
   "author": {
     "name": "TypeDreamMoon",
