@@ -44,6 +44,37 @@ test('every known-good source in the corpus scans clean', { skip: CORPUS ? false
 });
 
 /**
+ * The other direction: the negative corpus, and the line this half does not cross.
+ *
+ * The compiler's `.bad.` files are almost all *semantic* -- does this module exist, does this input
+ * take this type -- and every one of those is deliberately not reported here, for the reason at the
+ * top of `server/diagnostics.ts`: a second implementation of a semantic rule is a second source of
+ * truth, and two of those on one question drift. What is owned here is DFX1xxx, the compiler's own
+ * lexical family, ported from its lexer.
+ *
+ * So this asserts a silence rather than a catch, and that is the point. If a future change starts
+ * guessing at semantics, this is what notices.
+ */
+test('the negative corpus is left to the compiler, except where it is lexical', { skip: CORPUS ? false : 'DREAMFX_CORPUS_DIR is not set' }, () => {
+	const bad = collect(CORPUS!, /*negative=*/true);
+	assert.ok(bad.length > 0, `no .bad.dfs/.dfe/.dfm files under ${CORPUS}`);
+
+	const claimed: string[] = [];
+	for (const file of bad) {
+		for (const diagnostic of analyze(fs.readFileSync(file, 'utf8')).diagnostics) {
+			// A DFX1xxx here would be correct -- it is this half's family. Anything else is this
+			// half having an opinion it is not entitled to.
+			if (!diagnostic.code?.startsWith('DFX1')) {
+				claimed.push(`${path.basename(file)}: ${diagnostic.code ?? '-'} ${diagnostic.message}`);
+			}
+		}
+	}
+
+	assert.deepEqual(claimed, [], `${claimed.length} non-lexical verdicts on the compiler's negative corpus`);
+	console.log(`  ${bad.length} negative sources left to dfx`);
+});
+
+/**
  * The real index, end to end.
  *
  * Everything else about the index is tested against fixtures this file wrote, which proves the
@@ -96,7 +127,7 @@ function findIndex(root: string): string | undefined {
 	return fs.existsSync(nested) ? nested : undefined;
 }
 
-function collect(root: string): string[] {
+function collect(root: string, negative = false): string[] {
 	const found: string[] = [];
 
 	const walk = (directory: string): void => {
@@ -118,7 +149,7 @@ function collect(root: string): string[] {
 				continue;
 			}
 			// `.bad.` files exist to fail: they are the parser's negative corpus.
-			if (/\.(dfs|dfe|dfm)$/i.test(entry.name) && !/\.bad\./i.test(entry.name)) {
+			if (/\.(dfs|dfe|dfm)$/i.test(entry.name) && /\.bad\./i.test(entry.name) === negative) {
 				found.push(full);
 			}
 		}

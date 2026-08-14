@@ -207,10 +207,11 @@ second debugger to port 6019.
 
 The test suite runs without VSCode and without an engine — including `serverProtocol.test.ts`, which
 spawns the built server over stdio and holds a real LSP conversation with it. To sweep a real source
-tree as well:
+tree as well — point it at a project or at the plugin itself, and it checks both directions: nothing
+flagged on a source the compiler accepts, and nothing but DFX1xxx claimed on one it rejects:
 
 ```bash
-DREAMFX_CORPUS_DIR=/path/to/YourProject npm test
+DREAMFX_CORPUS_DIR=/path/to/Plugins/DreamFX npm test
 ```
 
 ## Links

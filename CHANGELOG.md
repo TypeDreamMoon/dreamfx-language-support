@@ -2,7 +2,18 @@
 
 ## Unreleased
 
-The language half is now a language server.
+### Checked against the compiler
+
+Swept the DreamFX plugin's own tree: 24 sources it accepts scan clean and are structurally
+recognised, and none of its 40 `.bad.` files draw a verdict here — they fail on semantics, which
+stays with `dfx` for the reason at the top of `server/diagnostics.ts`. Of the lexical family,
+DFX1001 through DFX1005 are all implemented; DFX1000 is "could not read source file", which cannot
+arise in an editor that already has the text.
+
+The corpus test now asserts that silence rather than only the clean scan, so a future change that
+starts guessing at semantics is caught by the test rather than by a user.
+
+### The language half is now a language server
 
 `src/core/` was kept free of `vscode` from the start on the argument that it was the seam an LSP
 server would reuse. This is that reuse: the core moved across unchanged, and only the ~400 lines of

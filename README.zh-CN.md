@@ -186,10 +186,11 @@ provider 里抬出来。
 用 **Extension + Server** 复合配置,它会额外挂一个调试器到 6019 端口。
 
 测试不需要 VSCode,也不需要引擎 —— 包括 `serverProtocol.test.ts`,它会拉起构建好的 server 走 stdio
-跟它进行一次真实的 LSP 对话。要顺带扫一棵真实源码树:
+跟它进行一次真实的 LSP 对话。要顺带扫一棵真实源码树 —— 指向一个项目或插件本身,它会双向校对:
+编译器接受的源一条都不许报,编译器拒绝的源这边除 DFX1xxx 外不许有任何判断:
 
 ```bash
-DREAMFX_CORPUS_DIR=/path/to/YourProject npm test
+DREAMFX_CORPUS_DIR=/path/to/Plugins/DreamFX npm test
 ```
 
 ## 链接
