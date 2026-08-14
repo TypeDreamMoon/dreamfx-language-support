@@ -1,6 +1,6 @@
 # DreamFXLang Language Support
 
-[![version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/github/package-json/v/TypeDreamMoon/dreamfx-language-support?color=blue)](CHANGELOG.md)
 [![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
