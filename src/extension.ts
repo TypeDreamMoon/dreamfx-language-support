@@ -1,27 +1,25 @@
 /**
- * DreamFXLang language support.
+ * DreamFXLang language support: the client half.
  *
- * Scope, deliberately: everything here is either purely lexical, a wrapper around the plugin's own
- * CLI, or a reader of the index that CLI exports. No semantic knowledge is duplicated -- see the
- * note at the top of features/diagnostics.ts for why that boundary is where it is.
+ * Scope, deliberately: everything here is a wrapper around the plugin's own CLI, or a conversation
+ * with a running Unreal Editor. The language itself -- completion, hover, outline, syntax
+ * diagnostics, and the module index they all read -- lives in the server next door, and the split is
+ * not cosmetic. See the note at the top of `core/index.ts` for why the language knowledge was kept
+ * editor-agnostic in the first place, and `server/diagnostics.ts` for why the squiggles are owned in
+ * two places on purpose.
  */
 
 import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { readDocumentHeader } from './core';
-import { DreamFXCompletionProvider, DreamFXHoverProvider } from './features/completion';
 import { DfxCommand, DfxRunner, DfxScope, DfxTaskProvider, TASK_TYPE, activeSourceDocument } from './features/dfx';
-import { SyntaxDiagnostics } from './features/diagnostics';
-import { SchemaIndexCache, describeIndex } from './features/indexCache';
 import { BridgeClient } from './features/bridge';
 import { BridgeStatusBar } from './features/bridgeStatusBar';
+import { DreamFXLanguageClient } from './features/languageClient';
 import { newSourceFile } from './features/newFile';
 import { ProblemSink } from './features/problemSink';
-import { DreamFXDocumentSymbolProvider } from './features/symbols';
 import { VerifyOnSave } from './features/verifyOnSave';
-
-const LANGUAGE_SELECTOR: vscode.DocumentSelector = { language: 'dreamfxlang' };
 
 export function activate(context: vscode.ExtensionContext): void {
 	const output = vscode.window.createOutputChannel('DreamFXLang');
@@ -29,43 +27,37 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	const runner = new DfxRunner(output);
 	const bridge = new BridgeClient(output);
-	const indexCache = new SchemaIndexCache(output);
 	const problems = new ProblemSink();
 	const verifier = new VerifyOnSave(runner, bridge, problems, output);
 	const bridgeStatusBar = new BridgeStatusBar(bridge);
-	context.subscriptions.push(indexCache, problems, verifier, bridgeStatusBar);
+	const language = new DreamFXLanguageClient(context, output);
+	context.subscriptions.push(problems, verifier, bridgeStatusBar, language);
 
 	context.subscriptions.push(
-		vscode.languages.registerDocumentSymbolProvider(LANGUAGE_SELECTOR, new DreamFXDocumentSymbolProvider()),
-		new SyntaxDiagnostics(),
 		vscode.tasks.registerTaskProvider(TASK_TYPE, new DfxTaskProvider(runner)),
-		// '.' so `User.` offers nothing surprising, '(' and ',' so an argument list keeps offering
-		// input names without a retrigger, '=' so a value position offers enum entries immediately.
-		vscode.languages.registerCompletionItemProvider(
-			LANGUAGE_SELECTOR, new DreamFXCompletionProvider(indexCache), '(', ',', '=', ' '),
-		vscode.languages.registerHoverProvider(LANGUAGE_SELECTOR, new DreamFXHoverProvider(indexCache)),
+		// The index lands on disk minutes after the command was issued, and the server's watcher only
+		// covers files inside a workspace folder -- which the destination need not be. Saying so
+		// directly is cheaper than widening the watch.
+		vscode.tasks.onDidEndTask((event) => {
+			const definition = event.execution.task.definition;
+			if (definition.type === TASK_TYPE && definition.command === 'index') {
+				language.reloadIndex();
+			}
+		}),
 	);
 
-	const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-	status.command = 'dreamfx.refreshIndex';
-	context.subscriptions.push(status, indexCache.onDidChange(() => updateStatus()));
-
-	const updateStatus = (): void => {
-		const editor = vscode.window.activeTextEditor;
-		if (!editor || editor.document.languageId !== 'dreamfxlang') {
-			status.hide();
-			return;
-		}
-		const state = indexCache.current;
-		status.text = state.index ? `$(symbol-module) DreamFX: ${describeIndex(state)}` : '$(warning) DreamFX: no index';
-		status.tooltip = state.index
-			? `${describeIndex(state)}\nGenerated ${state.index.source.generatedUtc}\nClick to rebuild (boots the engine).`
-			: `${state.problem ?? 'no index'}\nClick to build one (boots the engine).`;
-		status.show();
-	};
-
-	context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => updateStatus()));
-	updateStatus();
+	// Not awaited: a server that failed to start should cost completions, not the build button.
+	void language.start().catch((error: unknown) => {
+		output.appendLine(`language server: failed to start -- ${String(error)}`);
+		void vscode.window.showErrorMessage(
+			'DreamFXLang: the language server did not start, so completion and syntax diagnostics are off.',
+			'Show Output',
+		).then((choice) => {
+			if (choice === 'Show Output') {
+				output.show(true);
+			}
+		});
+	});
 
 	/**
 	 * Runs a command through the editor when one is listening, and through the CLI otherwise.
@@ -184,7 +176,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	};
 
 	const refreshIndex = async (): Promise<void> => {
-		const destination = await indexCache.indexDestination();
+		const destination = await language.indexDestination();
 		if (!destination) {
 			void vscode.window.showErrorMessage('DreamFXLang: open a project folder first.');
 			return;

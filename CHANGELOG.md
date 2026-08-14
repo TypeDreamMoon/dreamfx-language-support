@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+The language half is now a language server.
+
+`src/core/` was kept free of `vscode` from the start on the argument that it was the seam an LSP
+server would reuse. This is that reuse: the core moved across unchanged, and only the ~400 lines of
+provider glue that wrapped it were rewritten against the protocol.
+
+- **Completion, hover, the outline and the lexical diagnostics run in a separate process.** The
+  extension is now `out/client.js` and `out/server.js`, both esbuild bundles. The .vsix grew from
+  171 KB to 255 KB; shipping `node_modules` instead of bundling would have added about 2 MB.
+- **Builds, verifies, asset actions and the editor bridge stay on the client**, and so do the
+  Problems entries they publish. The protocol has nothing to say about a conversation with a
+  running Unreal Editor, and the two diagnostic owners stay separate for the reason they always
+  did: sharing one would let a build result wipe the syntax errors, or the reverse.
+- **Which index answers a completion no longer depends on which window has focus.** The old cache
+  held one index and picked it by asking for the active editor, so in a workspace with several DFX
+  roots the answer moved with the focus. The server caches per root and resolves the root from the
+  document the request is about. Focus now decides only what the status bar reports.
+- **One structural walk per document version**, shared by diagnostics and the outline instead of
+  done twice.
+- Server breakpoints: run the **Extension + Server** compound, which attaches to port 6019.
+- `serverProtocol.test.ts` spawns the built server over stdio and holds a real LSP conversation
+  with it — the one test that would catch a bundle that boots broken. Still no editor required.
+
 ## 0.4.0
 
 Phase W6: the editor bridge.

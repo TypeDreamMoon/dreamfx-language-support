@@ -1,10 +1,19 @@
-# Sources and tests: the .vsix ships the compiled out/src, not the TypeScript it came from.
+# The .vsix ships two bundles -- out/client.js and out/server.js -- and nothing else that is code.
+#
+# out/src and out/test are tsc's output. They exist so `node --test` has something to run and so the
+# types are checked by a real compiler rather than by esbuild, which does not check them at all.
+# Neither is what the editor loads, so neither ships.
 src/**
 test/**
+out/src/**
 out/test/**
 out/**/*.map
 tsconfig.json
+esbuild.js
 .github/**
 .vscode/**
 .gitignore
 *.vsix
+
+# Bundled, so the tree they came from is dead weight -- around 2 MB of it.
+node_modules/**

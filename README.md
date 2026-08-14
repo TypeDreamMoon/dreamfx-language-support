@@ -190,14 +190,24 @@ typing.
 
 ```bash
 npm install
-npm run compile
+npm run build
 npm test
 ```
 
-`F5` launches an Extension Development Host. The language core under `src/core/` imports nothing
-from `vscode` — that is the seam a language server or another IDE would reuse, so it stays clean.
+The extension is two processes. `src/server/` is a standard LSP server — completion, hover, the
+outline and the lexical diagnostics, plus the `.dfx-index.json` it reads them from. `src/extension.ts`
+is the client: builds, verifies, asset actions and the editor bridge, none of which the protocol has
+anything to say about. The language core under `src/core/` imports nothing from `vscode` and nothing
+from the protocol either, which is what let the server be lifted out of the providers unchanged.
 
-The test suite runs without VSCode and without an engine. To sweep a real source tree as well:
+`npm run build` is `tsc` for the types and the tests, then esbuild for the two bundles the editor
+actually loads (`out/client.js`, `out/server.js`). `F5` launches an Extension Development Host; to
+put breakpoints in the server as well, run the **Extension + Server** compound, which attaches a
+second debugger to port 6019.
+
+The test suite runs without VSCode and without an engine — including `serverProtocol.test.ts`, which
+spawns the built server over stdio and holds a real LSP conversation with it. To sweep a real source
+tree as well:
 
 ```bash
 DREAMFX_CORPUS_DIR=/path/to/YourProject npm test

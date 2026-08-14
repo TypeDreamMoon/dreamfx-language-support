@@ -6,8 +6,8 @@
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-      "outFiles": ["${workspaceFolder}/out/src/**/*.js"],
-      "preLaunchTask": "npm: compile"
+      "outFiles": ["${workspaceFolder}/out/*.js"],
+      "preLaunchTask": "npm: build"
     },
     {
       "name": "Run Extension (on the DreamFX workspace)",
@@ -17,8 +17,25 @@
         "--extensionDevelopmentPath=${workspaceFolder}",
         "${input:dfxWorkspace}"
       ],
-      "outFiles": ["${workspaceFolder}/out/src/**/*.js"],
-      "preLaunchTask": "npm: compile"
+      "outFiles": ["${workspaceFolder}/out/*.js"],
+      "preLaunchTask": "npm: build"
+    },
+    {
+      // The server is a second process, so its breakpoints need a second debugger. Start the
+      // extension first: the port is opened by the server the client spawns, and only in debug mode.
+      "name": "Attach to Server",
+      "type": "node",
+      "request": "attach",
+      "port": 6019,
+      "restart": true,
+      "outFiles": ["${workspaceFolder}/out/server.js"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Extension + Server",
+      "configurations": ["Run Extension", "Attach to Server"],
+      "stopAll": true
     }
   ],
   "inputs": [

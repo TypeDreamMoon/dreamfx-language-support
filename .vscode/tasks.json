@@ -10,6 +10,13 @@
     },
     {
       "type": "npm",
+      "script": "build",
+      "problemMatcher": ["$tsc"],
+      "label": "npm: build",
+      "detail": "tsc for the types and the tests, esbuild for the two bundles the editor loads."
+    },
+    {
+      "type": "npm",
       "script": "watch",
       "isBackground": true,
       "problemMatcher": ["$tsc-watch"],

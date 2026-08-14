@@ -40,7 +40,7 @@
     "workspaceContains:**/*.dfe",
     "workspaceContains:**/*.dfm"
   ],
-  "main": "./out/src/extension.js",
+  "main": "./out/client.js",
   "contributes": {
     "languages": [
       {
@@ -265,17 +265,27 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
+    "bundle": "node esbuild.js",
+    "bundle:watch": "node esbuild.js --watch",
+    "build": "npm run compile && npm run bundle",
+    "pretest": "npm run build",
     "test": "node --test out/test/",
-    "package": "npm run compile && npx @vscode/vsce package",
-    "vscode:prepublish": "npm run compile"
+    "package": "npm run compile && node esbuild.js --production && npx @vscode/vsce package",
+    "vscode:prepublish": "npm run compile && node esbuild.js --production"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.2.2",
+    "esbuild": "^0.24.2",
     "typescript": "^5.5.4",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "vscode-uri": "^3.1.0"
   }
 }

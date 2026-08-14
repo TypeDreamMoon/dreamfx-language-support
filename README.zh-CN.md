@@ -172,14 +172,21 @@ npm install && npm run package
 
 ```bash
 npm install
-npm run compile
+npm run build
 npm test
 ```
 
-`F5` 启动 Extension Development Host。`src/core/` 下的语言核心**不 import 任何 `vscode`** ——
-那是将来 language server 或别的 IDE 要复用的接缝,所以保持干净。
+扩展是两个进程。`src/server/` 是一个标准 LSP server —— 补全、悬停、大纲、词法诊断,以及它们读的
+`.dfx-index.json`。`src/extension.ts` 是客户端:构建、校验、资产操作和编辑器桥,这些协议都管不着。
+`src/core/` 下的语言核心既不 import `vscode`、也不 import 协议,正因如此 server 才能原封不动地从
+provider 里抬出来。
 
-测试不需要 VSCode,也不需要引擎。要顺带扫一棵真实源码树:
+`npm run build` 先跑 `tsc`(类型和测试),再跑 esbuild 打出编辑器真正加载的两个 bundle
+(`out/client.js`、`out/server.js`)。`F5` 启动 Extension Development Host;要在 server 里下断点,
+用 **Extension + Server** 复合配置,它会额外挂一个调试器到 6019 端口。
+
+测试不需要 VSCode,也不需要引擎 —— 包括 `serverProtocol.test.ts`,它会拉起构建好的 server 走 stdio
+跟它进行一次真实的 LSP 对话。要顺带扫一棵真实源码树:
 
 ```bash
 DREAMFX_CORPUS_DIR=/path/to/YourProject npm test
