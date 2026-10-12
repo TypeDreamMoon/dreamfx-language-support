@@ -1,4 +1,5 @@
-# The .vsix ships two bundles -- out/client.js and out/server.js -- and nothing else that is code.
+# The .vsix ships three bundles -- out/client.js, out/server.js and the webview's out/curveEditor.js --
+# and nothing else that is code.
 #
 # out/src and out/test are tsc's output. They exist so `node --test` has something to run and so the
 # types are checked by a real compiler rather than by esbuild, which does not check them at all.

@@ -1,8 +1,8 @@
 /**
  * DreamFXLang language support: the client half.
  *
- * Scope, deliberately: everything here is a wrapper around the plugin's own CLI, or a conversation
- * with a running Unreal Editor. The language itself -- completion, hover, outline, syntax
+ * Scope, deliberately: everything here is a wrapper around the plugin's own CLI, a conversation
+ * with a running Unreal Editor, or editor UI the protocol has no word for (the curve editor). The language itself -- completion, hover, outline, syntax
  * diagnostics, and the module index they all read -- lives in the server next door, and the split is
  * not cosmetic. See the note at the top of `core/index.ts` for why the language knowledge was kept
  * editor-agnostic in the first place, and `server/diagnostics.ts` for why the squiggles are owned in
@@ -16,6 +16,7 @@ import { readDocumentHeader } from './core';
 import { DfxCommand, DfxRunner, DfxScope, DfxTaskProvider, TASK_TYPE, activeSourceDocument } from './features/dfx';
 import { BridgeClient } from './features/bridge';
 import { BridgeStatusBar } from './features/bridgeStatusBar';
+import { CurveEditor } from './features/curveEditor';
 import { DreamFXLanguageClient } from './features/languageClient';
 import { newSourceFile } from './features/newFile';
 import { ProblemSink } from './features/problemSink';
@@ -31,7 +32,8 @@ export function activate(context: vscode.ExtensionContext): void {
 	const verifier = new VerifyOnSave(runner, bridge, problems, output);
 	const bridgeStatusBar = new BridgeStatusBar(bridge);
 	const language = new DreamFXLanguageClient(context, output);
-	context.subscriptions.push(problems, verifier, bridgeStatusBar, language);
+	const curves = new CurveEditor(context.extensionUri, output);
+	context.subscriptions.push(problems, verifier, bridgeStatusBar, language, curves);
 
 	context.subscriptions.push(
 		vscode.tasks.registerTaskProvider(TASK_TYPE, new DfxTaskProvider(runner)),
@@ -199,6 +201,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('dreamfx.buildFile', () => run('build', 'file')),
 		vscode.commands.registerCommand('dreamfx.buildAll', () => run('build', 'all')),
 		vscode.commands.registerCommand('dreamfx.refreshIndex', () => refreshIndex()),
+		// The lens passes the document and the offset of the literal; the palette and the context menu
+		// pass nothing and get the literal under the cursor.
+		vscode.commands.registerCommand('dreamfx.editCurve', (uri?: string, offset?: number) => curves.open(uri, offset)),
 		vscode.commands.registerCommand('dreamfx.openAsset', () => assetAction('openAsset')),
 		vscode.commands.registerCommand('dreamfx.decompileAsset', () => assetAction('decompile')),
 		vscode.commands.registerCommand('dreamfx.adoptAsset', () => assetAction('adopt')),

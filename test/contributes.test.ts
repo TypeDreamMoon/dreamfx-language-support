@@ -12,6 +12,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 
+import { EDIT_CURVE_COMMAND } from '../src/lspProtocol';
+
 const ROOT = path.join(__dirname, '..', '..');
 
 function readJson(...segments: string[]): any {
@@ -152,6 +154,11 @@ test('every contributed command is registered by the extension', () => {
 
 	const unregistered = contributed.filter((command) => !source.includes(`'${command}'`));
 	assert.deepEqual(unregistered, [], 'a contributed command with no handler shows up in the palette and then fails');
+});
+
+test('the command the server names in its lenses is one the extension contributes', () => {
+	const contributed: string[] = packageJson.contributes.commands.map((command: any) => command.command);
+	assert.ok(contributed.includes(EDIT_CURVE_COMMAND));
 });
 
 test('every menu entry names a contributed command', () => {

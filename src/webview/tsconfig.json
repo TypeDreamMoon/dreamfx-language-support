@@ -1,0 +1,12 @@
+{
+	// The webview is the one place that runs in a browser, so it is the one place that sees the DOM.
+	// It is checked here rather than by the root config, whose lib deliberately has no DOM: a `window`
+	// or `document` in the server or the core should fail to compile, not ship.
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"noEmit": true
+	},
+	"include": ["./**/*.ts"],
+	"exclude": []
+}

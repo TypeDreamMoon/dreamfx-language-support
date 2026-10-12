@@ -1,5 +1,5 @@
 /**
- * Two bundles: the extension the editor loads, and the server it spawns.
+ * Three bundles: the extension the editor loads, the server it spawns, and the curve editor's page.
  *
  * Bundling rather than shipping `node_modules` is not a size micro-optimisation -- it is the
  * difference between a .vsix that stayed roughly the size it was and one that grew by the whole
@@ -32,6 +32,9 @@ const shared = {
 const builds = [
 	{ ...shared, entryPoints: ['src/extension.ts'], outfile: 'out/client.js', external: ['vscode'] },
 	{ ...shared, entryPoints: ['src/server/server.ts'], outfile: 'out/server.js' },
+	// The curve editor's page runs in the webview, which is a browser: no Node, no `vscode` module,
+	// one script loaded by a <script> tag. Electron's Chromium is far past ES2022.
+	{ ...shared, entryPoints: ['src/webview/curveEditor.ts'], outfile: 'out/curveEditor.js', platform: 'browser', format: 'iife', target: 'es2022' },
 ];
 
 async function main() {
