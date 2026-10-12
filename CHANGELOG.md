@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.6.0
+
+### A curve editor
+
+`curve { }` literals can now be edited in a graph, the way Unreal's curve editor edits them
+([#1](https://github.com/TypeDreamMoon/dreamfx-language-support/issues/1)). An **Edit curve** lens
+sits above each literal; it opens a panel beside the text with draggable keys and tangent handles,
+box selection, double-click to add, the Auto / User / Break / Linear / Constant modes, flatten and
+straighten, framing, pan and zoom, numeric fields for the selected keys, and a handful of templates.
+
+- **The source is the only model.** The panel draws what it last read out of the file and writes
+  every change back as an ordinary edit, so there is one undo history and it is the file's. Text
+  typed while the panel is open redraws it; a stale edit is answered with the current state rather
+  than applied.
+- **Minimal rewrites.** Unchanged keys keep their text byte for byte, comments and alignment
+  included. A removed key takes its line and its trailing comment; a new key lands between its
+  neighbours on its own line, or inline in an inline literal.
+- **Spelled like the exporter.** Numbers go through a mirror of the plugin's
+  `FormatFloatLossless` (`SanitizeFloat`, then `%.7g`–`%.9g`), and attributes follow the
+  decompiler's order and its rule for when `Tangent=` must be named.
+- **Drawn like the engine.** Evaluation and drawing follow `FRichCurve`: left-key interpolation,
+  the one-third Bézier, held values outside the keys, and the *stored* tangents — so a key written
+  without tangents is drawn flat, because that is how it builds. Editing near an Auto key re-derives
+  its slope with `AutoSetTangents`'s own rules, for the touched keys and their neighbours only.
+- **Refuses what the compiler refuses.** DFX4039, DFX4042, DFX2020 and non-numeric tangents make a
+  literal read-only, with the reason shown.
+- **Checked on real sources.** 748 curve literals and 1,889 keys from a project's decompiled content
+  read cleanly, re-spell to the same keys, and produce no edit when left alone. The corpus test now
+  sweeps curves too.
+
+The webview is a third esbuild bundle (`out/curveEditor.js`), type-checked against the DOM by its
+own `tsconfig` so that the core and the server still cannot reach for `window`. The lens comes from
+the language server; the editor itself is client UI. `dreamfx.curveCodeLens` turns the lens off.
+
 ## 0.5.0
 
 ### Checked against the compiler
