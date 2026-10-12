@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 
 import { contextAt } from '../src/core/context';
+import { findCurveLiterals, formatKey, planCurveEdit, sameKey } from '../src/core/curveLiteral';
 import { parseSchemaIndex } from '../src/core/schemaIndex';
 import { analyze } from '../src/core/structure';
 
@@ -72,6 +73,64 @@ test('the negative corpus is left to the compiler, except where it is lexical', 
 
 	assert.deepEqual(claimed, [], `${claimed.length} non-lexical verdicts on the compiler's negative corpus`);
 	console.log(`  ${bad.length} negative sources left to dfx`);
+});
+
+/**
+ * Every curve the plugin's tree holds, through the editor's reader and writer.
+ *
+ * Three things have to hold for the curve editor to be safe on real sources: a literal the compiler
+ * accepts is one the editor will edit, opening it and changing nothing writes nothing, and each key
+ * re-spelled from scratch means what it meant. The last is the one that matters -- it is the
+ * exporter's own output being read and written back.
+ */
+test('every curve in the corpus reads, round-trips and is left alone when unchanged', { skip: CORPUS ? false : 'DREAMFX_CORPUS_DIR is not set' }, () => {
+	const failures: string[] = [];
+	let literals = 0;
+	let keys = 0;
+
+	for (const file of collect(CORPUS!)) {
+		const source = fs.readFileSync(file, 'utf8');
+		for (const literal of findCurveLiterals(source)) {
+			literals += 1;
+			const where = `${path.basename(file)}:${literal.line}`;
+			if (literal.problems.length > 0) {
+				failures.push(`${where}: ${literal.problems.join('; ')}`);
+				continue;
+			}
+			const unchanged = literal.keys.map(({ time, value, interp, tangentMode, arrive, leave }, origin) =>
+				({ time, value, interp, tangentMode, arrive, leave, origin }));
+			if (planCurveEdit(source, literal, unchanged).length > 0) {
+				failures.push(`${where}: an unchanged curve produced an edit`);
+			}
+			for (const key of literal.keys) {
+				keys += 1;
+				const spelled = formatKey(key, key);
+				const reread = findCurveLiterals(`V = curve { ${spelled}; }`)[0]?.keys[0];
+				if (!reread || !sameKey(reread, key)) {
+					failures.push(`${where}: '${source.slice(key.start, key.end)}' re-spelled as '${spelled}'`);
+				}
+			}
+		}
+	}
+
+	assert.deepEqual(failures, []);
+	assert.ok(literals > 0, `no curve literals under ${CORPUS}`);
+	console.log(`  ${literals} curve literals, ${keys} keys`);
+});
+
+test('a curve the compiler refuses for its spelling is refused by the curve editor too', { skip: CORPUS ? false : 'DREAMFX_CORPUS_DIR is not set' }, () => {
+	// An interpolation the compiler does not know is DFX4039 there and a read-only literal here. An
+	// empty curve is DFX4038, a rule about the input it fills, and stays the compiler's alone.
+	const negative = collect(CORPUS!, /*negative=*/true).filter((file) => /BadCurveInterpolation/i.test(path.basename(file)));
+	if (negative.length === 0) {
+		console.log('  no BadCurveInterpolation source under the corpus dir; point it at the plugin to run this');
+		return;
+	}
+	for (const file of negative) {
+		const literals = findCurveLiterals(fs.readFileSync(file, 'utf8'));
+		assert.ok(literals.some((literal) => literal.problems.some((problem) => problem.includes('DFX4039'))),
+			`${path.basename(file)} was not refused`);
+	}
 });
 
 /**
