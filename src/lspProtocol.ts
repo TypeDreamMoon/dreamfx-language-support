@@ -17,6 +17,12 @@
  * interfaces below are the whole of the type safety, so keep them and the handlers in step.
  */
 
+/**
+ * A client command the server names: the target of the "Edit curve" lens. Arguments are the document
+ * URI as a string and the offset of the literal's `curve` keyword.
+ */
+export const EDIT_CURVE_COMMAND = 'dreamfx.editCurve';
+
 /** Server -> client. Fired on every index reload, including the failures. */
 export const INDEX_STATE_NOTIFICATION = 'dreamfx/indexState';
 
