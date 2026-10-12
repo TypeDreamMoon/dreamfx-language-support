@@ -21,6 +21,7 @@
 | **实时语法错误** | 未闭合的字符串、块注释、反引号名、原始块,非法字符,未闭合的块 —— 用**编译器自己的 DFX1xxx 码**报出,并链到它的文档 |
 | **补全** | 先按**当前所在的栈**过滤出模块名,再补该模块的**真实输入名**,再补枚举值 —— 全部来自项目**实际可用**的模块集,不是写死的表 |
 | **Hover** | 模块的说明、可用栈与完整签名;输入的类型、枚举值、是否接受表达式 |
+| **曲线编辑器** | 每个 `curve { }` 上方一个 **Edit curve**:在文本旁的图上拖关键帧和切线,源码随之改写。见[下文](#曲线编辑器) |
 | **代码片段** | 26 个骨架:各类文档、栈、`OnEvent`、`Stage`、渲染器、`curve { }`、`hlsl { }`、`Bind`、`disabled`、`as`、`@version`、`#Region` |
 | **新建文件** | `DreamFXLang: New Source File` —— 选类型、填资产名,得到一个**能直接 build 过**的文件 |
 | **任务与 Problems** | `verify` / `lint` / `build`,命令或任务两种入口,每个 `DFXnnnn` 带行列落进 Problems 面板,可点击跳转 |
@@ -57,6 +58,34 @@ pwsh -File .skill/dfx.ps1 index
 
 索引记录了引擎路径与已启用插件列表,因为正是这两样让它失效。目前**没有任何东西去比对它们** ——
 那需要一个活着的编辑器来比 —— 所以状态栏只显示索引是什么时候生成的,重建是一次点击。
+
+## 曲线编辑器
+
+每个 `curve { }` 字面量上方都有一个 **Edit curve** 镜头(CodeLens),点开后在文本旁边显示曲线图,
+操作照 Unreal 自带的曲线编辑器:拖关键帧、拖切线手柄、框选、双击加键、`Delete` 删键,
+在 Auto / User / Break / Linear / Constant 之间切换,压平或拉直切线,或者从模板重来。
+右键或中键拖动平移,滚轮缩放(`Shift` 只缩时间、`Alt` 只缩数值),`F` 显示全部。
+右键菜单和命令面板里也有 **Edit Curve Under Cursor**;编辑器开着时把光标移进另一个曲线字面量,
+它会自动切过去。
+
+**文本是唯一的模型。** 每次修改都作为普通编辑写进源码 —— 在文件自己的撤销历史里占一步,
+面板里按 `Ctrl+Z` 也是撤销这一步 —— 面板再按文件里的内容重画。面板开着时直接改文本,面板跟着重画。
+
+**改动是最小的。** 只重写数值变了的键;删掉的键连同它那一行和行尾注释一起删,新键插在相邻两键之间
+单独一行,写成一行的 `curve { 0.0 -> 1.0; 1.0 -> 0.0; }` 仍是一行。数字的写法与导出器逐位一致
+(`FormatFloatLossless`),属性顺序也和它一样,你自己写的属性保留你的写法。
+
+**画出来的就是构建出来的。** 曲线按 `FRichCurve` 自己的规则求值 —— 插值看左边的键、三分之一处的
+Bézier、键范围之外保持端点值 —— 用的是**存储的**切线。这在一种情况下很关键:没写 `Arrive`/`Leave`
+的键存的斜率是 0,构建出来就是 0,所以编辑器把它画成平的,而不是假装引擎会帮你平滑。
+当你在 `Auto` 键**附近做了编辑**,编辑器会像 Unreal 的编辑器那样重新推导它的斜率并写进源码
+(`Tangent=Auto; Arrive=…`)—— 但只限被编辑的键和它的相邻键,没碰过的键保持构建时的斜率不变。
+
+**拿不准就拒绝,不猜。** 编译器会拒绝的字面量 —— 未知插值(DFX4039)、未知切线模式(DFX4042)、
+未知属性(DFX2020)、切线不是纯数字 —— 以只读方式显示并给出原因,绝不改写。
+
+用真实源码核对过:某工程反编译内容里的 748 个曲线字面量(1,889 个键)全部能读入、逐键重写后
+含义不变、打开不改就不产生任何编辑。
 
 ## 保存即校验
 
@@ -129,6 +158,7 @@ npm install && npm run package
 | 命令 | |
 | --- | --- |
 | `DreamFXLang: New Source File` | 从模板创建 `.dfs` / `.dfe` / `.dfm` |
+| `DreamFXLang: Edit Curve Under Cursor` | 对光标所在的 `curve { }` 打开曲线编辑器(每个字面量上方也有镜头) |
 | `DreamFXLang: Rebuild Module Index` | 重新导出补全所读的模块索引。**只读** |
 | `DreamFXLang: Verify Current File` | 拿源码核对资产,开终端看过程。**只读** |
 | `DreamFXLang: Verify Current File (quietly…)` | 同上,但不开终端,结果直接进 Problems。**只读** |
@@ -165,6 +195,7 @@ npm install && npm run package
 | `dreamfx.dfxScriptPath` | `""` | `.skill/dfx.ps1` 的路径。留空则先从文件向上找,再搜工作区 |
 | `dreamfx.powershellPath` | `"pwsh"` | Windows PowerShell 5.1 请填 `powershell` |
 | `dreamfx.syntaxDiagnostics` | `true` | 输入时的实时词法问题 |
+| `dreamfx.curveCodeLens` | `true` | 每个 `curve { }` 上方的 **Edit curve** 镜头 |
 | `dreamfx.confirmBuild` | `true` | 写包类命令执行前先确认 |
 | `dreamfx.verifyOnSave` | `false` | 保存时校验。只读;每次约 13 秒 |
 
@@ -181,8 +212,8 @@ npm test
 `src/core/` 下的语言核心既不 import `vscode`、也不 import 协议,正因如此 server 才能原封不动地从
 provider 里抬出来。
 
-`npm run build` 先跑 `tsc`(类型和测试),再跑 esbuild 打出编辑器真正加载的两个 bundle
-(`out/client.js`、`out/server.js`)。`F5` 启动 Extension Development Host;要在 server 里下断点,
+`npm run build` 先跑 `tsc`(类型和测试),再跑 esbuild 打出编辑器真正加载的三个 bundle
+(`out/client.js`、`out/server.js`,以及曲线编辑器的页面 `out/curveEditor.js`)。`F5` 启动 Extension Development Host;要在 server 里下断点,
 用 **Extension + Server** 复合配置,它会额外挂一个调试器到 6019 端口。
 
 测试不需要 VSCode,也不需要引擎 —— 包括 `serverProtocol.test.ts`,它会拉起构建好的 server 走 stdio

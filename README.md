@@ -21,6 +21,7 @@ English | [简体中文](README.zh-CN.md)
 | **Live syntax errors** | Unterminated string, block comment, back-quoted name or raw block, an unexpected character, an unclosed block — reported with the compiler's own DFX1xxx codes, linked to its docs |
 | **Completion** | Module names filtered by the stack you are in, then that module's **real input names**, then its enum entries — all from the project's actual module set, not a baked-in table |
 | **Hover** | A module's description, stacks and full signature; an input's type, enum entries and whether it takes an expression |
+| **Curve editor** | An **Edit curve** lens on every `curve { }`: drag keys and tangents in a graph beside the text, and the source is rewritten as you go. See [below](#the-curve-editor) |
 | **Snippets** | 26 skeletons: documents, stacks, `OnEvent`, `Stage`, renderers, `curve { }`, `hlsl { }`, `Bind`, `disabled`, `as`, `@version`, `#Region` |
 | **New file** | `DreamFXLang: New Source File` — pick a kind, name the asset, get a file that builds |
 | **Tasks and Problems** | `verify` / `lint` / `build`, as commands or tasks, with every `DFXnnnn` landing in the Problems panel as a clickable entry |
@@ -63,6 +64,41 @@ changes. A table written into this extension would be wrong on the first day.
 The index records the engine path and the enabled plugin list, because those are what invalidate it.
 Nothing compares them yet — that needs a live editor to compare against — so the status bar shows
 when the index was generated and rebuilding is one click.
+
+## The curve editor
+
+Every `curve { }` literal gets an **Edit curve** lens. It opens a graph beside the text, after
+Unreal's own curve editor: drag keys, drag tangent handles, box-select, double-click to add a key,
+`Delete` to remove one, switch keys between Auto / User / Break / Linear / Constant, flatten or
+straighten tangents, or start over from a template. Right- or middle-drag pans, the wheel zooms
+(`Shift` for time only, `Alt` for value only), `F` frames the whole curve. The same editor is on the
+context menu and in the palette as **Edit Curve Under Cursor**, and moving the cursor into another
+literal points the open editor at it.
+
+**The text stays the only model.** Every change is written into the source as an ordinary edit —
+one undo step in the file's own history, `Ctrl+Z` in the panel included — and the panel redraws from
+what the file then says. Typing in the text while the panel is open simply redraws it.
+
+**Edits are minimal.** Only the keys whose numbers changed are rewritten; a removed key takes its
+line and its trailing comment, a new key goes on its own line between its neighbours, and an inline
+`curve { 0.0 -> 1.0; 1.0 -> 0.0; }` stays inline. Numbers are spelled exactly as the exporter spells
+them (`FormatFloatLossless`), attributes in the order it writes them, and an attribute you wrote is
+kept in your spelling.
+
+**What it draws is what the build makes.** The curve is evaluated with `FRichCurve`'s own rules —
+interpolation from the left key, the one-third Bézier, held values outside the keys — and from the
+**stored** tangents. That matters for one case: a key written without `Arrive`/`Leave` stores a zero
+slope and is built with it, so the editor draws it flat rather than pretending the engine will smooth
+it. When you *edit* near an `Auto` key, the editor re-derives its slope the way Unreal's editor does
+and writes it into the source (`Tangent=Auto; Arrive=…`) — but only for the keys the edit touched
+and their neighbours, so a key nobody went near keeps exactly the slope it was built with.
+
+**It refuses rather than guesses.** A literal the compiler would reject — an unknown interpolation
+(DFX4039) or tangent mode (DFX4042), an unknown attribute (DFX2020), a tangent that is not a plain
+number — is shown read-only with the reason, and never rewritten.
+
+Checked against real sources: the 748 curve literals (1,889 keys) in a project's decompiled content
+all read, re-spell to the same keys, and produce no edit when opened and left alone.
 
 ## Verify on save
 
@@ -144,6 +180,7 @@ Commands (`Ctrl+Shift+P`):
 | Command | |
 | --- | --- |
 | `DreamFXLang: New Source File` | Create a `.dfs` / `.dfe` / `.dfm` from a template |
+| `DreamFXLang: Edit Curve Under Cursor` | Open the curve editor on the `curve { }` under the cursor (also a lens on each literal) |
 | `DreamFXLang: Rebuild Module Index` | Re-export the module index that completion reads. **Reads only** |
 | `DreamFXLang: Verify Current File` | Check the file against its asset. **Reads only** |
 | `DreamFXLang: Lint Current File` | Style and consistency warnings. **Reads only** |
@@ -183,6 +220,7 @@ typing.
 | `dreamfx.dfxScriptPath` | `""` | Path to `.skill/dfx.ps1`. Empty means: search upward from the file, then the workspace |
 | `dreamfx.powershellPath` | `"pwsh"` | Use `powershell` for Windows PowerShell 5.1 |
 | `dreamfx.syntaxDiagnostics` | `true` | Live lexical problems while typing |
+| `dreamfx.curveCodeLens` | `true` | The **Edit curve** lens above each `curve { }` literal |
 | `dreamfx.confirmBuild` | `true` | Ask before a command that writes packages |
 | `dreamfx.verifyOnSave` | `false` | Verify a source when it is saved. Reads only; ~13s per save |
 
@@ -200,8 +238,8 @@ is the client: builds, verifies, asset actions and the editor bridge, none of wh
 anything to say about. The language core under `src/core/` imports nothing from `vscode` and nothing
 from the protocol either, which is what let the server be lifted out of the providers unchanged.
 
-`npm run build` is `tsc` for the types and the tests, then esbuild for the two bundles the editor
-actually loads (`out/client.js`, `out/server.js`). `F5` launches an Extension Development Host; to
+`npm run build` is `tsc` for the types and the tests, then esbuild for the three bundles the
+editor actually loads (`out/client.js`, `out/server.js`, and the curve editor's page `out/curveEditor.js`). `F5` launches an Extension Development Host; to
 put breakpoints in the server as well, run the **Extension + Server** compound, which attaches a
 second debugger to port 6019.
 
