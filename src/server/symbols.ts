@@ -20,6 +20,7 @@ const SYMBOL_KINDS: Record<StructureKind, SymbolKind> = {
 	renderer: SymbolKind.Object,
 	moduleCall: SymbolKind.Method,
 	declaration: SymbolKind.Field,
+	group: SymbolKind.Namespace,
 };
 
 export function documentSymbols(document: TextDocument, model: DocumentModel): DocumentSymbol[] {

@@ -55,6 +55,20 @@ test('half-typed text still produces symbols rather than throwing', () => {
 	assert.equal(symbols.length, 1);
 });
 
+test('a Group is a namespace symbol that holds its declarations', () => {
+	const source = 'System(Name="T")\n{\n\tProperties = {\n\t\tGroup("Burst") {\n\t\t\tint SparkCount = 24;\n\t\t}\n\t}\n}\n';
+	const properties = symbolsOf(source)[0].children![0];
+	assert.equal(properties.name, 'Properties');
+
+	const [burst] = properties.children!;
+	assert.equal(burst.name, 'Burst');
+	assert.equal(burst.kind, SymbolKind.Namespace);
+	assert.deepEqual(burst.children!.map((child) => [child.name, child.kind]), [['SparkCount', SymbolKind.Field]]);
+	// The row selects the quoted name (line 3, after the opening paren), not the whole block.
+	assert.equal(burst.selectionRange.start.line, 3);
+	assert.equal(burst.range.end.line, 5);
+});
+
 test('an empty document has no root to convert', () => {
 	assert.deepEqual(symbolsOf(''), []);
 });

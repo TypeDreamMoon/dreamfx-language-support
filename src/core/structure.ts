@@ -21,7 +21,8 @@ export type StructureKind =
 	| 'section'
 	| 'renderer'
 	| 'moduleCall'
-	| 'declaration';
+	| 'declaration'
+	| 'group';
 
 export interface StructureNode {
 	kind: StructureKind;
@@ -63,6 +64,15 @@ export function analyze(text: string): DocumentModel {
 
 function laterOf(a: SourcePosition, b: SourcePosition): SourcePosition {
 	return a.offset >= b.offset ? a : b;
+}
+
+/** Declarations under `node`, however many groups deep -- the groups themselves are not counted. */
+function countDeclarations(node: StructureNode): number {
+	let count = 0;
+	for (const child of node.children) {
+		count += child.kind === 'group' ? countDeclarations(child) : 1;
+	}
+	return count;
 }
 
 class Walker {
@@ -271,8 +281,11 @@ class Walker {
 				? this.parseDeclarationBlock(node.children)
 				: this.parseOpaqueBlock();
 		}
-		if (node.children.length > 0) {
-			node.detail = `${node.children.length}`;
+		// Declarations, not children: a `Group` is a container, and "3" for two groups and a loose
+		// parameter says nothing about how many parameters the section holds.
+		const declarations = countDeclarations(node);
+		if (declarations > 0) {
+			node.detail = `${declarations}`;
 		}
 		return node;
 	}
@@ -638,7 +651,14 @@ class Walker {
 		return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 	}
 
-	/** A `Properties` / `Inputs` / `Defaults` block: one outline entry per declaration. */
+	/**
+	 * A `Properties` / `Inputs` / `Defaults` block: one outline entry per declaration, and one per
+	 * `Group("Name") { ... }` scope, which holds declarations of its own (and further groups).
+	 *
+	 * This one body walker serves all three sections even though the compiler only opens a group in
+	 * `Properties` and `Inputs`: a group head is unambiguous from the text, and rejecting it inside
+	 * `Defaults` is the compiler's call, made with its own message -- not a brace-balance error here.
+	 */
 	private parseDeclarationBlock(children: StructureNode[]): SourcePosition {
 		const open = this.scanner.next(); // '{'
 		let end = open.end;
@@ -677,6 +697,10 @@ class Walker {
 	private parseDeclaration(): StructureNode | undefined {
 		if (this.skipRegionMarker()) {
 			return undefined;
+		}
+
+		if (this.atGroupHead()) {
+			return this.parseGroup();
 		}
 
 		const head: Token[] = [];
@@ -722,6 +746,79 @@ class Walker {
 			selectionEnd: head[head.length - 1].end,
 			children: [],
 		};
+	}
+
+	/**
+	 * `Group` followed by `(`. The keyword is matched case-insensitively because the compiler does
+	 * (it mirrors DreamShader's group head), and a type name is never `Group(`, so the head cannot be
+	 * mistaken for the start of an ordinary declaration.
+	 */
+	private atGroupHead(): boolean {
+		const token = this.scanner.peek();
+		return token.kind === 'identifier' && !token.quoted
+			&& token.text.toLowerCase() === 'group'
+			&& this.scanner.atSymbol('(', 1);
+	}
+
+	/**
+	 * `Group("Name") { <declarations and further groups> }`, optionally followed by a `;`.
+	 *
+	 * The head is read leniently -- whether the argument is a quoted, non-empty name is the compiler's
+	 * to say (DFX2027, DFX2028) -- but never past a `{`, `}` or `;`, so a head that is still being
+	 * typed costs this group and not the rest of the block. Nested groups compose into `Outer|Inner`
+	 * in the compiler; here the nesting itself is the outline, so each node keeps its own local name.
+	 */
+	private parseGroup(): StructureNode {
+		const keyword = this.scanner.next(); // 'Group'
+		let end = this.scanner.next().end; // '('
+
+		let name: Token | undefined;
+		if (this.scanner.peek().kind === 'string') {
+			name = this.scanner.next();
+			end = name.end;
+		}
+
+		let depth = 1;
+		for (;;) {
+			const token = this.scanner.peek();
+			if (token.kind === 'end'
+				|| (token.kind === 'symbol' && (token.text === '{' || token.text === '}' || token.text === ';'))) {
+				break;
+			}
+
+			end = this.scanner.next().end;
+			if (token.kind === 'symbol' && token.text === '(') {
+				depth += 1;
+			} else if (token.kind === 'symbol' && token.text === ')') {
+				depth -= 1;
+				if (depth === 0) {
+					break;
+				}
+			}
+		}
+
+		const node: StructureNode = {
+			kind: 'group',
+			name: name && name.text.length > 0 ? name.text : keyword.text,
+			detail: 'Group',
+			start: keyword.start,
+			end,
+			selectionStart: name ? name.start : keyword.start,
+			selectionEnd: name ? name.end : keyword.end,
+			children: [],
+		};
+
+		if (this.scanner.atSymbol('{')) {
+			node.end = this.parseDeclarationBlock(node.children);
+			// The compiler tolerates a separator after the closing brace; it is not part of the group.
+			this.scanner.tryConsumeSymbol(';');
+		}
+
+		const declarations = countDeclarations(node);
+		if (declarations > 0) {
+			node.detail = `Group · ${declarations} ${declarations === 1 ? 'entry' : 'entries'}`;
+		}
+		return node;
 	}
 
 	/** A block whose contents are not outline material -- consumed whole, braces balanced. */

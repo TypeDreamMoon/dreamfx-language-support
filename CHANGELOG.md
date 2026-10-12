@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### `Group("Name") { ... }` parameter scopes
+
+The compiler's parameter groups (inside `Properties` and a module's `Inputs`) were read as stray
+braces: a file using them showed a red `Unexpected '}': no block is open here.` for every closing
+brace after the first group, and the outline lost everything that followed.
+
+- **The outline nests them.** A group is a node of its own, holding its declarations and any
+  further groups; the section's count is its parameters, not its direct children.
+- **Same head the compiler accepts.** `Group` is matched case-insensitively and a `;` after the
+  closing brace is tolerated. Whether the name is a non-empty string is left to the compiler
+  (DFX2027, DFX2028), as is where a group may appear.
+
 ## 0.6.0
 
 ### A curve editor
