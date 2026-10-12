@@ -12,6 +12,8 @@
  */
 
 import {
+	CodeLens,
+	CodeLensRefreshRequest,
 	CompletionItem,
 	DidChangeConfigurationNotification,
 	DidChangeWatchedFilesNotification,
@@ -36,6 +38,7 @@ import {
 	RELOAD_INDEX_NOTIFICATION,
 } from '../lspProtocol';
 import { AnalysisCache } from './analysisCache';
+import { curveLenses } from './codeLens';
 import { completionAt, hoverAt } from './completion';
 import { syntaxDiagnostics } from './diagnostics';
 import { SchemaIndexCache } from './schemaIndex';
@@ -61,9 +64,13 @@ const indexes = new SchemaIndexCache(
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasDidChangeWatchedFilesCapability = false;
+let hasCodeLensRefreshCapability = false;
 
 /** `dreamfx.syntaxDiagnostics`, cached until the client says it changed. */
 let syntaxDiagnosticsEnabled = true;
+
+/** `dreamfx.curveCodeLens`, likewise. */
+let curveCodeLensEnabled = true;
 
 const debounceTimers = new Map<string, NodeJS.Timeout>();
 /** URIs whose diagnostics have been published at least once; a first pass is not debounced. */
@@ -74,6 +81,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 	hasConfigurationCapability = Boolean(capabilities.workspace?.configuration);
 	hasWorkspaceFolderCapability = Boolean(capabilities.workspace?.workspaceFolders);
 	hasDidChangeWatchedFilesCapability = Boolean(capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration);
+	hasCodeLensRefreshCapability = Boolean(capabilities.workspace?.codeLens?.refreshSupport);
 
 	indexes.setWorkspaceFolders(folderPaths(params));
 
@@ -86,6 +94,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 			completionProvider: { triggerCharacters: TRIGGER_CHARACTERS },
 			hoverProvider: true,
 			documentSymbolProvider: true,
+			codeLensProvider: { resolveProvider: false },
 			workspace: hasWorkspaceFolderCapability
 				? { workspaceFolders: { supported: true, changeNotifications: true } }
 				: undefined,
@@ -124,7 +133,14 @@ connection.onInitialized(() => {
 connection.onDidChangeWatchedFiles(() => indexes.invalidateAll());
 
 connection.onDidChangeConfiguration(() => {
-	void refreshSettings().then(() => refreshAllDiagnostics());
+	void refreshSettings().then(() => {
+		refreshAllDiagnostics();
+		// Lenses are pulled, so turning them off does nothing visible until the client is told to ask again.
+		if (hasCodeLensRefreshCapability) {
+			connection.sendRequest(CodeLensRefreshRequest.type)
+				.catch((error: unknown) => connection.console.warn(`could not refresh lenses: ${String(error)}`));
+		}
+	});
 });
 
 // ------------------------------------------------------------- language features
@@ -144,6 +160,11 @@ connection.onHover((params): Hover | undefined => {
 connection.onDocumentSymbol((params): DocumentSymbol[] => {
 	const document = documents.get(params.textDocument.uri);
 	return document ? documentSymbols(document, analyses.get(document)) : [];
+});
+
+connection.onCodeLens((params): CodeLens[] => {
+	const document = documents.get(params.textDocument.uri);
+	return document && curveCodeLensEnabled ? curveLenses(document) : [];
 });
 
 // ------------------------------------------------------------- custom messages
@@ -213,6 +234,7 @@ async function refreshSettings(): Promise<void> {
 
 	const settings = await connection.workspace.getConfiguration('dreamfx');
 	syntaxDiagnosticsEnabled = settings?.syntaxDiagnostics !== false;
+	curveCodeLensEnabled = settings?.curveCodeLens !== false;
 }
 
 // ------------------------------------------------------------- boot

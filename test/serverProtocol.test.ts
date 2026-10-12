@@ -22,7 +22,7 @@ import {
 	StreamMessageWriter,
 	createMessageConnection,
 } from 'vscode-jsonrpc/node';
-import { Diagnostic, DocumentSymbol, InitializeResult } from 'vscode-languageserver';
+import { CodeLens, Diagnostic, DocumentSymbol, InitializeResult } from 'vscode-languageserver';
 
 const SERVER = path.join(__dirname, '..', 'server.js');
 
@@ -88,6 +88,7 @@ test('the bundle boots and declares what it can do', () => {
 	assert.equal(capabilities.textDocumentSync, 2);
 	assert.equal(capabilities.hoverProvider, true);
 	assert.equal(capabilities.documentSymbolProvider, true);
+	assert.deepEqual(capabilities.codeLensProvider, { resolveProvider: false });
 	assert.deepEqual(capabilities.completionProvider?.triggerCharacters, ['(', ',', '=', ' ']);
 });
 
@@ -141,4 +142,34 @@ test('completion with no index loaded is empty, not an error', async () => {
 		position: { line: 5, character: 3 },
 	});
 	assert.deepEqual(items, []);
+});
+
+test('a curve literal gets a lens that opens the editor on it', async () => {
+	const source = [
+		'System(Name="C")',
+		'{',
+		'    Emitter E',
+		'    {',
+		'        ParticleUpdate = {',
+		'            ScaleSpriteSize(UniformScaleFactor = FloatFromCurve(FloatCurve = curve { 0.0 -> 1.0; 1.0 -> 0.0; }));',
+		'            M(V = curve { 0.0 -> 1.0 [ Interp=Smooth ]; });',
+		'        }',
+		'    }',
+		'}',
+		'',
+	].join('\n');
+	await open('file:///curve.dfs', source);
+
+	const lenses = await connection.sendRequest<CodeLens[]>('textDocument/codeLens', {
+		textDocument: { uri: 'file:///curve.dfs' },
+	});
+
+	assert.equal(lenses.length, 2);
+	const [good, bad] = lenses;
+	assert.equal(good.range.start.line, 5);
+	assert.equal(good.command?.command, 'dreamfx.editCurve');
+	// The client re-reads its own text; all it needs is which document and where the keyword is.
+	assert.deepEqual(good.command?.arguments, ['file:///curve.dfs', source.indexOf('curve {')]);
+	assert.match(good.command!.title, /Edit curve · 2 keys/);
+	assert.match(bad.command!.title, /read-only/, 'a literal the compiler would refuse is offered for viewing only');
 });
