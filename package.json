@@ -32,7 +32,8 @@
     "particles",
     "dfs",
     "dfe",
-    "dfm"
+    "dfm",
+    "curve editor"
   ],
   "activationEvents": [
     "onLanguage:dreamfxlang",
@@ -108,6 +109,11 @@
         "title": "DreamFXLang: Build All Sources (writes assets)"
       },
       {
+        "command": "dreamfx.editCurve",
+        "title": "DreamFXLang: Edit Curve Under Cursor",
+        "icon": "$(graph-line)"
+      },
+      {
         "command": "dreamfx.refreshIndex",
         "title": "DreamFXLang: Rebuild Module Index",
         "icon": "$(refresh)"
@@ -168,6 +174,11 @@
           "command": "dreamfx.buildFile",
           "when": "resourceLangId == dreamfxlang",
           "group": "navigation@2"
+        },
+        {
+          "command": "dreamfx.editCurve",
+          "when": "resourceLangId == dreamfxlang",
+          "group": "navigation@3"
         }
       ]
     },
@@ -249,6 +260,11 @@
           "default": true,
           "description": "Report lexical problems (unterminated string, block comment, back-quoted name or raw block) while typing. Semantic problems come from dfx and are never guessed at here."
         },
+        "dreamfx.curveCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an \"Edit curve\" lens above every curve { } literal. The editor it opens is also on the editor context menu and in the command palette (DreamFXLang: Edit Curve Under Cursor)."
+        },
         "dreamfx.confirmBuild": {
           "type": "boolean",
           "default": true,
@@ -263,7 +279,7 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && tsc -p src/webview",
     "watch": "tsc -watch -p ./",
     "bundle": "node esbuild.js",
     "bundle:watch": "node esbuild.js --watch",
