@@ -18,3 +18,5 @@ export * from './schemaIndex';
 export * from './structure';
 export * from './templates';
 export * from './workQueue';
+export * from './textEdits';
+export * from './pullSummary';
