@@ -128,13 +128,15 @@ Unreal 编辑器开着这个工程时,`verify` 与 `build` **交给它做**,而�
 - **没人在听的时候写下的请求会被丢弃,不会排队。** 等到有编辑器启动时,发它的人早已超时走了别的路;
   而在启动时执行一条过期的 `build` 会写下没人要的包。
 
-## 还没做
-
-| | 状态 |
-| --- | --- |
-| 发布到 VSCode Marketplace | 押后 —— release 里发 `.vsix` |
-
 ## 安装
+
+从 Visual Studio Marketplace:搜索 **DreamFXLang Language Support**,或者
+
+```bash
+code --install-extension typedreammoon.dreamfxlang-language-support
+```
+
+每个版本都会发布到那里,同时作为 `.vsix` 挂在对应的 GitHub Release 上。
 
 从 release:下载 `.vsix` 后运行
 
