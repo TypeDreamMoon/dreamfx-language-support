@@ -178,6 +178,27 @@ test('the task definition covers exactly the commands the runner knows', () => {
 	assert.deepEqual(definition.required, ['command']);
 });
 
+// ---------------------------------------------------------------- pull
+
+test('pull is offered for .dfs files only, and structural edits are off by default', () => {
+	// A .dfe is copied into whichever system references it and a .dfm builds no asset, so neither
+	// has values to read back; offering the command on them would only end in an error message.
+	const command = packageJson.contributes.commands.find((entry: any) => entry.command === 'dreamfx.pullFromAsset');
+	assert.ok(command);
+
+	const menus = packageJson.contributes.menus;
+	for (const menu of ['commandPalette', 'editor/title', 'explorer/context']) {
+		const entry = menus[menu].find((candidate: any) => candidate.command === 'dreamfx.pullFromAsset');
+		assert.ok(entry, `${menu} has no pull entry`);
+		assert.match(entry.when, /resourceExtname == .dfs/, `${menu} should gate pull on .dfs`);
+	}
+
+	const setting = packageJson.contributes.configuration.properties['dreamfx.pull.structuralEdits'];
+	assert.equal(setting.type, 'boolean');
+	assert.equal(setting.default, false, 'adding and removing whole lines is opt-in');
+	assert.ok(setting.markdownDescription.length > 0);
+});
+
 // ---------------------------------------------------------------- snippets
 
 test('the snippets file is valid and every snippet has a prefix and a body', () => {

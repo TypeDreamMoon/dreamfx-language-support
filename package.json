@@ -137,6 +137,11 @@
         "title": "DreamFXLang: Adopt This Asset (needs the editor)"
       },
       {
+        "command": "dreamfx.pullFromAsset",
+        "title": "DreamFX: Pull Values from Asset",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "dreamfx.bridgeStatus",
         "title": "DreamFXLang: Editor Bridge Status",
         "icon": "$(plug)"
@@ -162,6 +167,11 @@
           "command": "dreamfx.openAsset",
           "when": "resourceLangId == dreamfxlang && resourceExtname != .dfe",
           "group": "navigation@3"
+        },
+        {
+          "command": "dreamfx.pullFromAsset",
+          "when": "resourceExtname == .dfs",
+          "group": "navigation@4"
         }
       ],
       "editor/context": [
@@ -179,6 +189,19 @@
           "command": "dreamfx.editCurve",
           "when": "resourceLangId == dreamfxlang",
           "group": "navigation@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "dreamfx.pullFromAsset",
+          "when": "resourceExtname == .dfs"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "dreamfx.pullFromAsset",
+          "when": "resourceExtname == .dfs",
+          "group": "navigation@9"
         }
       ]
     },
@@ -274,6 +297,11 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Run `dfx verify` when a source is saved, putting the result in Problems. Reads only — no packages are written, and only one engine runs at a time.\n\n**Off by default because it is expensive, not because it is unfinished:** every `dfx` call boots the Unreal Editor. Measured on the reference project, one file takes about 13 seconds, nearly all of it boot — tolerable for a deliberate pass, too slow to sit behind every save while iterating. It becomes cheap once the extension can talk to an editor that is already running."
+        },
+        "dreamfx.pull.structuralEdits": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Let **Pull Values from Asset** also apply structural differences — stacks, modules or lines the asset has that the text does not, and the reverse — rather than only changed literal values. Off by default: a value is a number the author can see move, a structural edit adds or removes whole lines of the source. With it off, structural differences are still counted and reported (DFX7113), just not written."
         }
       }
     }

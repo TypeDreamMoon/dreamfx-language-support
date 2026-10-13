@@ -20,6 +20,7 @@ import { CurveEditor } from './features/curveEditor';
 import { DreamFXLanguageClient } from './features/languageClient';
 import { newSourceFile } from './features/newFile';
 import { ProblemSink } from './features/problemSink';
+import { PullFromAsset } from './features/pull';
 import { VerifyOnSave } from './features/verifyOnSave';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -29,11 +30,15 @@ export function activate(context: vscode.ExtensionContext): void {
 	const runner = new DfxRunner(output);
 	const bridge = new BridgeClient(output);
 	const problems = new ProblemSink();
+	// Its own collection: what a pull reports describes a comparison with the asset, and clearing it
+	// must not clear (or be cleared by) what verify says about the source.
+	const pullProblems = new ProblemSink('dreamfxlang-pull');
 	const verifier = new VerifyOnSave(runner, bridge, problems, output);
 	const bridgeStatusBar = new BridgeStatusBar(bridge);
 	const language = new DreamFXLanguageClient(context, output);
 	const curves = new CurveEditor(context.extensionUri, output);
-	context.subscriptions.push(problems, verifier, bridgeStatusBar, language, curves);
+	const pull = new PullFromAsset(runner, bridge, pullProblems, output, () => bridgeStatusBar.refresh());
+	context.subscriptions.push(problems, pullProblems, verifier, bridgeStatusBar, language, curves, pull);
 
 	context.subscriptions.push(
 		vscode.tasks.registerTaskProvider(TASK_TYPE, new DfxTaskProvider(runner)),
@@ -207,6 +212,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('dreamfx.openAsset', () => assetAction('openAsset')),
 		vscode.commands.registerCommand('dreamfx.decompileAsset', () => assetAction('decompile')),
 		vscode.commands.registerCommand('dreamfx.adoptAsset', () => assetAction('adopt')),
+		// From the explorer the command is handed the file; from the palette and the title bar, the
+		// active document is used.
+		vscode.commands.registerCommand('dreamfx.pullFromAsset', (uri?: vscode.Uri) => pull.run(uri)),
 		// The quiet form of verify: no terminal, results straight into Problems. The task-based
 		// `verifyFile` stays, because when a run misbehaves you want to see it happen.
 		vscode.commands.registerCommand('dreamfx.verifyFileNow', async () => {
