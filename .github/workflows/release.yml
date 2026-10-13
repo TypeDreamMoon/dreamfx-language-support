@@ -3,6 +3,10 @@ name: Build VSIX Release
 # Packages and publishes whenever something that ends up inside the .vsix changes on main. The tag
 # is derived from package.json rather than pushed by hand, so the version in the marketplace and the
 # version in the manifest cannot disagree.
+#
+# Publishing to the Visual Studio Marketplace needs the VSCE_PAT repository secret (an Azure DevOps
+# personal access token with the Marketplace "Manage" scope for the typedreammoon publisher). Without
+# it that step is skipped, and the GitHub Release is unaffected.
 
 on:
   push:
@@ -40,6 +44,12 @@ jobs:
   release:
     name: Package and publish VSIX
     runs-on: ubuntu-latest
+
+    # Job level, not step level: a step's `if` can read the job's env but not its own, and secrets
+    # themselves cannot be tested in an `if` at all. vsce reads VSCE_PAT from the environment, so the
+    # publish step needs nothing more.
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
     steps:
       - name: Checkout
@@ -135,3 +145,19 @@ jobs:
           else
             gh release create "$TAG" "$VSIX" --title "$TAG" --notes-file release-notes.md
           fi
+
+      # After the GitHub Release on purpose: a Marketplace failure (an expired token, a rejected
+      # manifest) must not stop the release that people can already download from. It still fails the
+      # run, so it is seen. The same .vsix that was just attached is what is published, not a rebuild.
+      #
+      # --skip-duplicate makes this safe to run again for a version that is already live, which
+      # happens whenever something that does not bump the version (the README, this file) lands on main.
+      - name: Publish to the Visual Studio Marketplace
+        if: ${{ env.VSCE_PAT != '' }}
+        env:
+          VSIX: ${{ steps.version.outputs.vsix }}
+        run: npx @vscode/vsce publish --packagePath "$VSIX" --skip-duplicate
+
+      - name: Note that the Marketplace step was skipped
+        if: ${{ env.VSCE_PAT == '' }}
+        run: echo "::notice::VSCE_PAT is not set, so nothing was published to the Marketplace. The GitHub Release is done."
