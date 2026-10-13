@@ -9,8 +9,10 @@ import {
 	bridgePaths,
 	buildRequest,
 	canServe,
+	isUnknownActionResponse,
 	livenessOf,
 	makeRequestId,
+	parsePullResult,
 	parseResponse,
 	parseStatus,
 } from '../src/core/bridgeProtocol';
@@ -148,4 +150,95 @@ test('status parsing rejects what it cannot use', () => {
 	assert.equal(parseStatus('{}'), undefined);
 	assert.equal(parseStatus('nonsense'), undefined);
 	assert.equal(parseStatus(JSON.stringify(status()))?.pid, 4242);
+});
+
+// ---------------------------------------------------------------- pull
+
+function pullBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+	return {
+		changed: true,
+		newText: 'Value = 2.0;\n',
+		edits: 1,
+		compared: 12,
+		changedValues: 1,
+		undeclared: 0,
+		unwritable: 0,
+		unaddressable: 0,
+		withheld: 0,
+		added: 0,
+		removed: 0,
+		structureRefused: 0,
+		baselineUsed: true,
+		baselineWritten: false,
+		wroteFile: false,
+		reportPath: 'Saved/DreamFX/Pull/NS_Spark.txt',
+		report: ['DFX7116: Value 1.0 -> 2.0'],
+		...overrides,
+	};
+}
+
+test('a pull request carries the text, the structure switch and the apply flag', () => {
+	const request = buildRequest('abc', 'pull', { sourceFile: 'X.dfs', text: 'a', structure: false, apply: true });
+	assert.equal(request.action, 'pull');
+	assert.equal(request.text, 'a');
+	assert.equal(request.structure, false);
+	assert.equal(request.apply, true);
+});
+
+test('the pull result rides inside an ordinary response', () => {
+	const response = parseResponse(JSON.stringify({
+		protocol: 1, requestId: 'r1', ok: true, durationMs: 40, message: 'Pulled.', diagnostics: [], pull: pullBody(),
+	}));
+	assert.equal(response?.pull?.changed, true);
+	assert.equal(response?.pull?.newText, 'Value = 2.0;\n');
+	assert.equal(response?.pull?.compared, 12);
+	assert.equal(response?.pull?.baselineUsed, true);
+	assert.deepEqual(response?.pull?.report, ['DFX7116: Value 1.0 -> 2.0']);
+});
+
+test('a response with no pull field has none', () => {
+	const response = parseResponse(JSON.stringify({ protocol: 1, requestId: 'r1', ok: true, message: 'ok' }));
+	assert.equal(response?.pull, undefined);
+});
+
+test('a changed pull without its text is unusable', () => {
+	// Nothing to apply, and guessing "unchanged" would tell the author the asset agrees when it does not.
+	assert.equal(parsePullResult(pullBody({ newText: undefined })), undefined);
+	assert.equal(parsePullResult(pullBody({ newText: 5 })), undefined);
+});
+
+test('an unchanged pull needs no text, and ignores one if sent', () => {
+	const pull = parsePullResult(pullBody({ changed: false, newText: 'stray', edits: 0 }));
+	assert.equal(pull?.changed, false);
+	assert.equal(pull?.newText, undefined);
+});
+
+test('a pull result that is not an object with a boolean changed is rejected', () => {
+	assert.equal(parsePullResult(undefined), undefined);
+	assert.equal(parsePullResult(null), undefined);
+	assert.equal(parsePullResult([]), undefined);
+	assert.equal(parsePullResult('x'), undefined);
+	assert.equal(parsePullResult({ changed: 'yes' }), undefined);
+	assert.equal(parsePullResult({}), undefined);
+});
+
+test('missing or malformed counters read as zero rather than failing the pull', () => {
+	const pull = parsePullResult({ changed: false, withheld: 'two', undeclared: -3, compared: 7.9, report: ['a', 5, 'b'] });
+	assert.equal(pull?.withheld, 0);
+	assert.equal(pull?.undeclared, 0);
+	assert.equal(pull?.compared, 7);
+	assert.equal(pull?.added, 0);
+	assert.equal(pull?.reportPath, '');
+	assert.deepEqual(pull?.report, ['a', 'b']);
+});
+
+test('an editor that predates pull is recognised by its refusal', () => {
+	const refusal = (message: string, ok = false) =>
+		({ protocol: 1, requestId: 'r', ok, durationMs: 0, message, diagnostics: [] });
+	assert.equal(isUnknownActionResponse(refusal("Unknown action 'pull'."), 'pull'), true);
+	assert.equal(isUnknownActionResponse(refusal('unknown action ‘pull’'), 'pull'), true);
+	assert.equal(isUnknownActionResponse(refusal('Unknown action: pull'), 'pull'), false, 'a colon is a different message; do not over-match');
+	assert.equal(isUnknownActionResponse(refusal("Unknown action 'adopt'."), 'pull'), false);
+	assert.equal(isUnknownActionResponse(refusal('Source is not a .dfs.'), 'pull'), false);
+	assert.equal(isUnknownActionResponse(refusal("Unknown action 'pull'", true), 'pull'), false);
 });
