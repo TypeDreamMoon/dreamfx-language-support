@@ -6,7 +6,7 @@
 
 Edits made in the Niagara editor can be written back into the text
 ([#2](https://github.com/TypeDreamMoon/dreamfx-language-support/issues/2)) without disturbing its
-comments or structure. **DreamFX: Pull Values from Asset** works on a `.dfs` through the editor
+comments or structure. **DreamFXLang: Pull Values from Asset (needs the editor)** works on a `.dfs` through the editor
 bridge: it sends the buffer, shows the editor's answer as a diff, and on **Apply** edits the
 buffer.
 

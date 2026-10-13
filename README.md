@@ -104,7 +104,7 @@ all read, re-spell to the same keys, and produce no edit when opened and left al
 ## Pull values from the asset
 
 The text builds the asset, but nothing stops you tuning the asset in the Niagara editor and then
-wanting those numbers back in the text. **DreamFX: Pull Values from Asset** (palette, the editor
+wanting those numbers back in the text. **DreamFXLang: Pull Values from Asset (needs the editor)** (palette, the editor
 title bar, and the explorer's context menu on a `.dfs`) reads what the asset stores and writes
 the differences into the file.
 
@@ -234,7 +234,7 @@ Commands (`Ctrl+Shift+P`):
 | `DreamFXLang: Open the Asset This File Builds` | Opens it in the editor. Needs the bridge |
 | `DreamFXLang: Re-export This Asset to Source` | Decompile it again. Needs the bridge |
 | `DreamFXLang: Adopt This Asset` | Make the text the source of truth. Needs the bridge |
-| `DreamFX: Pull Values from Asset` | Write values changed in the Niagara editor back into the `.dfs`, via a diff. Needs the bridge; **does not save** |
+| `DreamFXLang: Pull Values from Asset (needs the editor)` | Write values changed in the Niagara editor back into the `.dfs`, via a diff. Needs the bridge; **does not save** |
 | `DreamFXLang: Editor Bridge Status` | Which route commands take, and a ping |
 
 `verify` and `build` are also contributed as tasks, so `tasks.json` can bind them to a key or run

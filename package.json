@@ -138,7 +138,7 @@
       },
       {
         "command": "dreamfx.pullFromAsset",
-        "title": "DreamFX: Pull Values from Asset",
+        "title": "DreamFXLang: Pull Values from Asset (needs the editor)",
         "icon": "$(cloud-download)"
       },
       {

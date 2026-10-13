@@ -15,9 +15,8 @@
  *    the author says yes carries `apply: true`.
  *  * **The edits come from the apply response, not from the preview.** The asset can move between
  *    the two requests, and the baseline that gets recorded is the one that answer was computed from.
- *  * **The document is never saved.** Saving a source builds it in the editor, and that build would
- *    regenerate the asset from the text -- the very thing a pull is for undoing. The author reviews
- *    the pulled values, then saves when they mean to.
+ *  * **The document is never saved.** Saving a source builds it in the editor, which writes assets;
+ *    that is the author's call, made after reviewing the pulled values, not a side effect of a pull.
  */
 
 import * as fs from 'fs';

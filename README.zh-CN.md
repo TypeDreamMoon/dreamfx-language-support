@@ -91,7 +91,7 @@ Bézier、键范围之外保持端点值 —— 用的是**存储的**切线。�
 ## 从资产拉回数值
 
 文本生成资产,但你完全可能在 Niagara 编辑器里把资产调了一遍,然后想把这些数值带回文本。
-**DreamFX: Pull Values from Asset**(命令面板、编辑器标题栏、资源管理器里 `.dfs` 的右键菜单)
+**DreamFXLang: Pull Values from Asset (needs the editor)**(命令面板、编辑器标题栏、资源管理器里 `.dfs` 的右键菜单)
 读取资产里存的值,把差异写进文件。
 
 1. 它把你的**缓冲区**(保没保存都行)发给编辑器,拿回「把资产的值拼进去之后文本应该是什么样」。
@@ -201,7 +201,7 @@ npm install && npm run package
 | `DreamFXLang: Open the Asset This File Builds` | 在编辑器里打开它。需要桥 |
 | `DreamFXLang: Re-export This Asset to Source` | 重新反编译成源码。需要桥 |
 | `DreamFXLang: Adopt This Asset` | 让文本成为唯一真相源。需要桥 |
-| `DreamFX: Pull Values from Asset` | 把在 Niagara 编辑器里改的数值经 diff 写回 `.dfs`。需要桥;**不保存** |
+| `DreamFXLang: Pull Values from Asset (needs the editor)` | 把在 Niagara 编辑器里改的数值经 diff 写回 `.dfs`。需要桥;**不保存** |
 | `DreamFXLang: Editor Bridge Status` | 当前走哪条路,以及 ping 一下 |
 
 `verify` 与 `build` 同时以任务形式贡献,所以 `tasks.json` 里可以绑快捷键或设为默认构建任务:
