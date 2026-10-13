@@ -27,6 +27,7 @@ English | [简体中文](README.zh-CN.md)
 | **Tasks and Problems** | `verify` / `lint` / `build`, as commands or tasks, with every `DFXnnnn` landing in the Problems panel as a clickable entry |
 | **Verify on save** | Opt-in (`dreamfx.verifyOnSave`): saving a source runs `verify` and puts the result in Problems, one engine at a time |
 | **Editor bridge** | With the Unreal Editor open, `verify` and `build` are handed to it instead of booting a second engine — **half a second instead of thirteen**. Plus open the asset a file builds, re-export it, or adopt it. See [below](#the-editor-bridge) |
+| **Pull from the asset** | Tweak a value in the Niagara editor, then **Pull Values from Asset** writes it back into the `.dfs` — as a few small edits you review in a diff first, comments and layout untouched. See [below](#pull-values-from-the-asset) |
 
 ## What it deliberately does not do
 
@@ -99,6 +100,49 @@ number — is shown read-only with the reason, and never rewritten.
 
 Checked against real sources: the 748 curve literals (1,889 keys) in a project's decompiled content
 all read, re-spell to the same keys, and produce no edit when opened and left alone.
+
+## Pull values from the asset
+
+The text builds the asset, but nothing stops you tuning the asset in the Niagara editor and then
+wanting those numbers back in the text. **DreamFX: Pull Values from Asset** (palette, the editor
+title bar, and the explorer's context menu on a `.dfs`) reads what the asset stores and writes
+the differences into the file.
+
+1. It sends the editor your **buffer** — saved or not — and gets back what the text would be with
+   the asset's values spliced in.
+2. If nothing differs you get a one-line summary: what was compared, and everything it saw but left
+   alone (below).
+3. Otherwise a **diff opens** — your text against the pulled text — and a prompt offers
+   **Apply N edits** or **Cancel**. Nothing has been written, and the editor has not recorded
+   anything, until you answer.
+4. **Apply** edits the buffer. It is one undo step; `Ctrl+Z` takes the whole pull back.
+
+**The text stays the only model, and the edits are minimal.** The new text is reduced to the
+smallest edits that produce it — changed lines are paired, then the shared start and end of each
+line are cut away — so a changed value is an edit of just the value. The comment after it, the
+alignment, and every untouched line (CRLF files included) are never replaced.
+
+**It does not save.** Saving a source builds it in the editor, and that build would regenerate the
+asset from the text — which is the thing a pull exists to avoid. Review the edits, then save when
+you mean to.
+
+**What it leaves alone is reported, not hidden.** The diagnostics land in Problems with their
+file and line: `DFX7106` the asset stores a value the text does not declare, `DFX7109` a stack
+that cannot be addressed, `DFX7111` a value that cannot be written as a literal, `DFX7115` the
+text is newer than the asset (so the asset's old value does not overwrite your newer one),
+`DFX7116` what would change, and `DFX7114` whether a baseline was used. The editor remembers what
+the asset held at the last pull, so a second pull only writes what moved since; a preview never
+moves that memory — only **Apply** does.
+
+**Structure is opt-in.** With `dreamfx.pull.structuralEdits` off (the default) only literal
+values are written; stacks, modules or lines that exist on one side only are counted and reported
+(`DFX7113`) but not applied. Turn it on to have them added or removed too (`DFX7112`) — the diff
+shows exactly which lines.
+
+**It needs the running editor**, because only the editor can read the asset and only the bridge can
+carry your unsaved buffer to it. With no editor, a file with no unsaved changes can fall back to
+`dfx pull -Apply` on the command line, which boots the engine and writes the file on disk. An editor
+running an older plugin answers that it does not know how to pull; update the plugin.
 
 ## Verify on save
 
@@ -190,6 +234,7 @@ Commands (`Ctrl+Shift+P`):
 | `DreamFXLang: Open the Asset This File Builds` | Opens it in the editor. Needs the bridge |
 | `DreamFXLang: Re-export This Asset to Source` | Decompile it again. Needs the bridge |
 | `DreamFXLang: Adopt This Asset` | Make the text the source of truth. Needs the bridge |
+| `DreamFX: Pull Values from Asset` | Write values changed in the Niagara editor back into the `.dfs`, via a diff. Needs the bridge; **does not save** |
 | `DreamFXLang: Editor Bridge Status` | Which route commands take, and a ping |
 
 `verify` and `build` are also contributed as tasks, so `tasks.json` can bind them to a key or run
@@ -225,6 +270,7 @@ typing.
 | `dreamfx.curveCodeLens` | `true` | The **Edit curve** lens above each `curve { }` literal |
 | `dreamfx.confirmBuild` | `true` | Ask before a command that writes packages |
 | `dreamfx.verifyOnSave` | `false` | Verify a source when it is saved. Reads only; ~13s per save |
+| `dreamfx.pull.structuralEdits` | `false` | Let **Pull Values from Asset** also add and remove whole lines (stacks, modules), not just change literal values |
 
 ## Development
 

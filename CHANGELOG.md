@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Pull values from the asset
+
+Edits made in the Niagara editor can be written back into the text
+([#2](https://github.com/TypeDreamMoon/dreamfx-language-support/issues/2)) without disturbing its
+comments or structure. **DreamFX: Pull Values from Asset** works on a `.dfs` through the editor
+bridge: it sends the buffer, shows the editor's answer as a diff, and on **Apply** edits the
+buffer.
+
+- **Minimal edits.** The returned text is reduced to the smallest edits that produce it — changed
+  lines paired, then the common start and end of each line cut away — so a changed value replaces
+  just the value. Comments, alignment and untouched lines (CRLF included) are never rewritten, and
+  the whole pull is one undo step.
+- **Review first, and a preview moves nothing.** The diff is requested with `apply: false`; only
+  **Apply** sends `apply: true`, which is what makes the editor record its baseline. If the file
+  changes while you are deciding, the preview is redone rather than applying stale text; if it
+  changes while the values are being applied, the edits are moved past the typing, or refused when
+  it overlaps them.
+- **It does not save.** Saving builds the source in the editor, which would regenerate the asset
+  from the text.
+- **The DFX71xx diagnostics land in Problems** with their file and line, in a collection of their
+  own so they never clear, or get cleared by, verify's. What was left alone — values the text
+  does not declare, values the text is newer than, values that cannot be written as literals — is
+  named in the summary, not folded into "up to date".
+- **`dreamfx.pull.structuralEdits`** (off by default) lets a pull also add and remove whole lines.
+- Without an editor, a file with no unsaved changes can fall back to `dfx pull -Apply`; an editor
+  on an older plugin is told to update it.
+
 ## 0.6.1
 
 ### `Group("Name") { ... }` parameter scopes
