@@ -17,9 +17,18 @@ import * as vscode from 'vscode';
 import { BridgeDiagnostic } from '../core';
 
 export class ProblemSink implements vscode.Disposable {
-	private readonly collection = vscode.languages.createDiagnosticCollection('dreamfxlang-dfx');
+	private readonly collection: vscode.DiagnosticCollection;
 	/** Which files each root file's last run reported. */
 	private readonly reported = new Map<string, string[]>();
+
+	/**
+	 * @param name the collection's name. A feature whose findings should come and go on their own
+	 *        schedule -- pull's, which describe a comparison rather than the source -- takes its own,
+	 *        so that clearing one run's problems can never clear another kind's.
+	 */
+	constructor(name = 'dreamfxlang-dfx') {
+		this.collection = vscode.languages.createDiagnosticCollection(name);
+	}
 
 	dispose(): void {
 		this.collection.dispose();

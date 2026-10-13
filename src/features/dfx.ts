@@ -176,6 +176,51 @@ export class DfxRunner {
 	}
 
 	/**
+	 * `dfx pull <file> -Apply`: read the asset and write its values into the file on disk.
+	 *
+	 * The route for when no editor is running. It edits the file in place, so it is only offered for a
+	 * buffer with no unsaved changes -- the CLI cannot see the buffer, and writing under it would
+	 * leave the editor holding text that no longer matches the disk. It carries no structure switch:
+	 * the CLI's own default applies, and the setting that governs the editor route is not forwarded
+	 * to a flag this side has no way to check exists.
+	 */
+	async createPullTask(document: vscode.TextDocument): Promise<vscode.Task | undefined> {
+		const script = await this.findScript(document);
+		if (!script) {
+			void vscode.window.showErrorMessage(
+				'DreamFXLang: could not find .skill/dfx.ps1. Set dreamfx.dfxScriptPath, or open the folder containing the DreamFX plugin.');
+			return undefined;
+		}
+
+		const shell = vscode.workspace.getConfiguration('dreamfx').get<string>('powershellPath', 'pwsh') || 'pwsh';
+		const cwd = this.resolveWorkingDirectory(script, document);
+		const args = ['pull', document.uri.fsPath, '-Apply'];
+
+		const execution = new vscode.ProcessExecution(
+			shell,
+			['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, ...args],
+			{ cwd });
+
+		const task = new vscode.Task(
+			{ type: TASK_TYPE, command: 'pull' } as vscode.TaskDefinition,
+			vscode.TaskScope.Workspace,
+			`pull ${path.basename(document.uri.fsPath)}`,
+			'DreamFXLang',
+			execution,
+			['$dreamfx']);
+
+		task.presentationOptions = {
+			reveal: vscode.TaskRevealKind.Always,
+			panel: vscode.TaskPanelKind.Dedicated,
+			clear: true,
+			showReuseMessage: false,
+		};
+
+		this.output.appendLine(`${shell} -File ${script} ${args.join(' ')}   (cwd ${cwd})`);
+		return task;
+	}
+
+	/**
 	 * `dfx.ps1` finds the .uproject by walking up from its target, and from the working directory
 	 * when there is no target -- so `-All` only works when the cwd is inside the project.
 	 */

@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 
 import {
 	BridgeAction,
+	BridgeRequestExtra,
 	BridgeResponse,
 	BridgeStatus,
 	Liveness,
@@ -96,7 +97,7 @@ export class BridgeClient {
 	async send(
 		projectDir: string,
 		action: BridgeAction,
-		extra: { scope?: 'file' | 'all'; sourceFile?: string; assetPath?: string; outputPath?: string } = {},
+		extra: BridgeRequestExtra = {},
 		timeoutMs: number = DEFAULT_TIMEOUT_MS,
 		token?: vscode.CancellationToken,
 	): Promise<BridgeSendResult> {
