@@ -149,13 +149,15 @@ The status bar shows which route the next command will take. **Editor Bridge Sta
   starts, whoever sent it has timed out and moved on — and executing a stale `build` at startup
   would write packages nobody asked for.
 
-## Not yet
-
-| | Status |
-| --- | --- |
-| Marketplace publishing | deferred — releases ship a `.vsix` |
-
 ## Install
+
+From the Visual Studio Marketplace: search for **DreamFXLang Language Support**, or
+
+```bash
+code --install-extension typedreammoon.dreamfxlang-language-support
+```
+
+Every release is published there and attached to its GitHub Release as a `.vsix`.
 
 From a release: download the `.vsix` and run
 
