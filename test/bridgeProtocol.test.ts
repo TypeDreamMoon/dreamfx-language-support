@@ -9,7 +9,9 @@ import {
 	bridgePaths,
 	buildRequest,
 	canServe,
+	chooseBridgePaths,
 	isUnknownActionResponse,
+	legacyBridgePaths,
 	livenessOf,
 	makeRequestId,
 	parsePullResult,
@@ -87,12 +89,25 @@ test('an unparsable heartbeat is stale, not alive', () => {
 	assert.equal(livenessOf(status({ heartbeatUtc: 'not a date' }), NOW, alwaysAlive), 'stale');
 });
 
-test('the bridge lives under Saved, which is already ignored by git', () => {
+test('the bridge lives under Intermediate/DreamSource/FX, which is already ignored by git', () => {
 	const paths = bridgePaths(path.join('I:', 'Proj'), path.join);
-	assert.ok(paths.root.endsWith(path.join('Saved', 'DreamFX', 'Bridge')));
+	assert.ok(paths.root.endsWith(path.join('Intermediate', 'DreamSource', 'FX', 'Bridge')));
 	assert.ok(paths.requests.endsWith(path.join('Bridge', 'Requests')));
 	assert.ok(paths.responses.endsWith(path.join('Bridge', 'Responses')));
 	assert.ok(paths.status.endsWith('status.json'));
+	assert.ok(legacyBridgePaths(path.join('I:', 'Proj'), path.join).root.endsWith(path.join('Saved', 'DreamFX', 'Bridge')));
+});
+
+test('the bridge in use is the one an editor wrote a status into, new before old', () => {
+	const project = path.join('I:', 'Proj');
+	const current = bridgePaths(project, path.join);
+	const legacy = legacyBridgePaths(project, path.join);
+	const choose = (...present: string[]) => chooseBridgePaths(project, path.join, (target) => present.includes(target)).root;
+
+	assert.equal(choose(current.status), current.root);
+	assert.equal(choose(current.status, legacy.status), current.root);
+	assert.equal(choose(legacy.status), legacy.root, 'an editor with a plugin from before DreamSource');
+	assert.equal(choose(), current.root, 'nobody listening: the new place is where the next editor will be');
 });
 
 test('request ids sort oldest first', () => {

@@ -21,8 +21,8 @@ const shared = {
 	bundle: true,
 	format: 'cjs',
 	platform: 'node',
-	// VSCode 1.85 -- the engine floor in package.json -- ships Node 18.
-	target: 'node18',
+	// VSCode 1.147 -- the engine floor in package.json, raised for node:sqlite -- ships Node 24.
+	target: 'node22',
 	sourcemap: !production,
 	sourcesContent: false,
 	minify: production,
@@ -30,8 +30,10 @@ const shared = {
 };
 
 const builds = [
-	{ ...shared, entryPoints: ['src/extension.ts'], outfile: 'out/client.js', external: ['vscode'] },
-	{ ...shared, entryPoints: ['src/server/server.ts'], outfile: 'out/server.js' },
+	// `node:sqlite` belongs to the host's runtime (the DreamSource databases are read with it) and is
+	// required lazily, so a runtime without it falls back to the old JSON; bundling could not supply it.
+	{ ...shared, entryPoints: ['src/extension.ts'], outfile: 'out/client.js', external: ['vscode', 'node:sqlite'] },
+	{ ...shared, entryPoints: ['src/server/server.ts'], outfile: 'out/server.js', external: ['node:sqlite'] },
 	// The curve editor's page runs in the webview, which is a browser: no Node, no `vscode` module,
 	// one script loaded by a <script> tag. Electron's Chromium is far past ES2022.
 	{ ...shared, entryPoints: ['src/webview/curveEditor.ts'], outfile: 'out/curveEditor.js', platform: 'browser', format: 'iife', target: 'es2022' },

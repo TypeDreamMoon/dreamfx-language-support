@@ -7,7 +7,7 @@
  *
  *  * The status bar reports on the module index, which the server loads and watches.
  *  * `dreamfx.refreshIndex` has to decide *where* a `dfx index` run should write, which depends on
- *    the same DFX-root search the server already does to find an existing index.
+ *    the same source-root resolution the server already does to find an existing index.
  *  * A `dfx index` run finishes on the client's side of the wire, and the file watcher may notice
  *    the write a beat later than the task does; the client says so rather than letting the status
  *    bar sit stale.
@@ -26,11 +26,23 @@ export const EDIT_CURVE_COMMAND = 'dreamfx.editCurve';
 /** Server -> client. Fired on every index reload, including the failures. */
 export const INDEX_STATE_NOTIFICATION = 'dreamfx/indexState';
 
-/** Client -> server. Answers with a filesystem path, or `null` when there is no workspace. */
+/** Client -> server. Answers with an `IndexDestination`, or `null` when there is no project. */
 export const INDEX_DESTINATION_REQUEST = 'dreamfx/indexDestination';
 
-/** Client -> server. "A `dfx index` run just finished, re-read from disk now." */
+/**
+ * Client -> server. "An index file may have changed: check, and re-read what moved."
+ *
+ * Sent when a `dfx index` run finishes and when the client's watchers see `.dreamfx/index.db`, its
+ * `-wal` or a `.dfx-index.json` change -- the client watches each project's roots even when they sit
+ * outside every workspace folder, which the server's own glob registration cannot reach.
+ */
 export const RELOAD_INDEX_NOTIFICATION = 'dreamfx/reloadIndex';
+
+/**
+ * Client -> server. "Where the FX sources are may have moved": `Config/DefaultDreamSource.ini`
+ * changed, or a migration moved `DFX/` into `DreamSource/FX/`.
+ */
+export const LAYOUT_CHANGED_NOTIFICATION = 'dreamfx/layoutChanged';
 
 /**
  * Client -> server. "This is the document the author is looking at."
@@ -49,8 +61,10 @@ export interface ActiveDocumentParams {
 
 /** What the server knows about the module index, in the shape the status bar consumes. */
 export interface IndexStateParams {
-	/** Absolute path of the file this came from, when one was found. */
+	/** Absolute path of the file this came from, when one was found, or where one would be. */
 	filePath?: string;
+	/** `database` for `.dreamfx/index.db`, `json` for the legacy `.dfx-index.json`. */
+	source?: 'database' | 'json';
 	/** Present when an index is loaded, absent when there is none. */
 	loaded?: {
 		moduleCount: number;
@@ -59,6 +73,16 @@ export interface IndexStateParams {
 	};
 	/** Why there is no index, when there is none. */
 	problem?: string;
+}
+
+export interface IndexDestination {
+	/**
+	 * What to pass as `-Out`, when the run should write somewhere other than the plugin's default.
+	 * Absent normally: the default is the project's `.dreamfx/index.db`, which is what the server reads.
+	 */
+	out?: string;
+	/** Where the result is expected to land, for the log. */
+	expected: string;
 }
 
 export interface IndexDestinationParams {

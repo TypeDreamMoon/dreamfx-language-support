@@ -173,6 +173,14 @@ export function parseSchemaIndex(text: string): { index: ModuleIndex } | { error
 		return { error: `the index file is not valid JSON (${String(error)})` };
 	}
 
+	return validateSchemaIndex(parsed);
+}
+
+/**
+ * The version check and shape check of `parseSchemaIndex`, for an index that arrives as an object --
+ * which is how `.dreamfx/index.db` delivers one once its rows are put back together.
+ */
+export function validateSchemaIndex(parsed: unknown): { index: ModuleIndex } | { error: string } {
 	const candidate = parsed as Partial<SchemaIndex>;
 	if (typeof candidate?.version !== 'number') {
 		return { error: 'the index file has no version' };

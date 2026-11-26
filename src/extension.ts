@@ -17,7 +17,10 @@ import { DfxCommand, DfxRunner, DfxScope, DfxTaskProvider, TASK_TYPE, activeSour
 import { BridgeClient } from './features/bridge';
 import { BridgeStatusBar } from './features/bridgeStatusBar';
 import { CurveEditor } from './features/curveEditor';
+import { DreamSourceHost } from './features/dreamSourceHost';
+import { EditorDiagnostics } from './features/editorDiagnostics';
 import { DreamFXLanguageClient } from './features/languageClient';
+import { registerDreamSourceMigration } from './features/migration';
 import { newSourceFile } from './features/newFile';
 import { ProblemSink } from './features/problemSink';
 import { PullFromAsset } from './features/pull';
@@ -38,7 +41,18 @@ export function activate(context: vscode.ExtensionContext): void {
 	const language = new DreamFXLanguageClient(context, output);
 	const curves = new CurveEditor(context.extensionUri, output);
 	const pull = new PullFromAsset(runner, bridge, pullProblems, output, () => bridgeStatusBar.refresh());
-	context.subscriptions.push(problems, pullProblems, verifier, bridgeStatusBar, language, curves, pull);
+	// Where the FX sources are (DreamSource/FX, or a legacy DFX/), and the watchers on what the editor
+	// writes there: shared, so the new-file command, the migration and the server agree.
+	const host = new DreamSourceHost(output);
+	const editorDiagnostics = new EditorDiagnostics(host, problems, output);
+	context.subscriptions.push(problems, pullProblems, verifier, bridgeStatusBar, language, curves, pull, host, editorDiagnostics);
+
+	context.subscriptions.push(
+		host.onDidChangeIndex(() => language.reloadIndex()),
+		host.onDidChangeLayout(() => language.layoutChanged()),
+	);
+	// The legacy DFX/ notice is raised from here, on activation; the command is registered below.
+	const migrateToDreamSource = registerDreamSourceMigration(context, host, bridge, output);
 
 	context.subscriptions.push(
 		vscode.tasks.registerTaskProvider(TASK_TYPE, new DfxTaskProvider(runner)),
@@ -191,14 +205,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
 		// Reads only -- no packages are written, so this is safe with the editor open. It still boots
 		// the engine, which is why it is a command and never automatic.
-		const task = await runner.createIndexTask(destination, activeSourceDocument());
+		output.appendLine(`index: a run now should land in ${destination.out ?? destination.expected}`);
+		const task = await runner.createIndexTask(destination.out, activeSourceDocument());
 		if (task) {
 			await vscode.tasks.executeTask(task);
 		}
 	};
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('dreamfx.newFile', () => newSourceFile()),
+		vscode.commands.registerCommand('dreamfx.newFile', () => newSourceFile(host)),
 		vscode.commands.registerCommand('dreamfx.verifyFile', () => run('verify', 'file')),
 		vscode.commands.registerCommand('dreamfx.verifyAll', () => run('verify', 'all')),
 		vscode.commands.registerCommand('dreamfx.lintFile', () => run('lint', 'file')),
@@ -250,6 +265,8 @@ export function activate(context: vscode.ExtensionContext): void {
 			}
 		}),
 		vscode.commands.registerCommand('dreamfx.showOutput', () => output.show(true)),
+		// Moves a legacy DFX/ into DreamSource/FX/ (spec 13.6). Refuses while an editor has the project open.
+		vscode.commands.registerCommand('dreamfx.migrateToDreamSource', () => migrateToDreamSource()),
 	);
 }
 

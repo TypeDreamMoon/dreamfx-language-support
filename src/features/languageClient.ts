@@ -6,7 +6,7 @@
  * indicator, the Problems entries from a `dfx` run -- is about work the client itself did.
  *
  * Note which side decides what. The server knows what the index *is*; the client knows which editor
- * has focus, and therefore which of a workspace's several DFX roots the author means. Neither can
+ * has focus, and therefore which of a workspace's several FX source roots the author means. Neither can
  * answer alone, so the client says what is focused (`dreamfx/activeDocument`) and the server answers
  * with the state for that root (`dreamfx/indexState`). Ageing the timestamp is the client's job for
  * the dull reason that "4m ago" goes stale on a clock tick rather than on an event.
@@ -26,8 +26,10 @@ import {
 	ActiveDocumentParams,
 	INDEX_DESTINATION_REQUEST,
 	INDEX_STATE_NOTIFICATION,
+	IndexDestination,
 	IndexDestinationParams,
 	IndexStateParams,
+	LAYOUT_CHANGED_NOTIFICATION,
 	RELOAD_INDEX_NOTIFICATION,
 } from '../lspProtocol';
 
@@ -89,21 +91,31 @@ export class DreamFXLanguageClient implements vscode.Disposable {
 	}
 
 	/** Where a `dfx index` run for the focused document should write. */
-	async indexDestination(): Promise<string | undefined> {
+	async indexDestination(): Promise<IndexDestination | undefined> {
 		const params: IndexDestinationParams = { activeUri: activeSourceUri()?.toString() };
-		const destination = await this.client.sendRequest<string | null>(INDEX_DESTINATION_REQUEST, params);
+		const destination = await this.client.sendRequest<IndexDestination | null>(INDEX_DESTINATION_REQUEST, params);
 		return destination ?? undefined;
 	}
 
 	/**
-	 * "An index run just finished."
+	 * "An index file may have changed": an index run just finished, or the client's watchers saw one.
 	 *
-	 * The watcher would notice on its own for anything inside a workspace folder, but the destination
-	 * is allowed to sit outside one -- it is derived from the focused file's DFX root, which need not
-	 * be open as a folder. Saying so explicitly costs a notification and closes that hole.
+	 * The server's own watcher would notice for anything inside a workspace folder, but a project's
+	 * source roots are allowed to sit outside every one -- the generated workspace opens the roots, not
+	 * the project. Saying so explicitly costs a notification and closes that hole; the server checks
+	 * the files and the revision before re-reading anything, so a redundant one costs a stat.
 	 */
 	reloadIndex(): void {
-		void this.client.sendNotification(RELOAD_INDEX_NOTIFICATION);
+		if (this.client.isRunning()) {
+			void this.client.sendNotification(RELOAD_INDEX_NOTIFICATION);
+		}
+	}
+
+	/** "Where the FX sources are may have moved": the ini changed, or a migration ran. */
+	layoutChanged(): void {
+		if (this.client.isRunning()) {
+			void this.client.sendNotification(LAYOUT_CHANGED_NOTIFICATION);
+		}
 	}
 
 	private announceActiveDocument(): void {
@@ -123,7 +135,10 @@ export class DreamFXLanguageClient implements vscode.Disposable {
 		const summary = describeIndex(this.state);
 		if (this.state.loaded) {
 			this.status.text = `$(symbol-module) DreamFX: ${summary}`;
-			this.status.tooltip = `${summary}\nGenerated ${this.state.loaded.generatedUtc}\nClick to rebuild (boots the engine).`;
+			const from = this.state.filePath
+				? `\nFrom ${this.state.filePath}${this.state.source === 'json' ? ' (legacy JSON; an updated DreamFX plugin writes .dreamfx/index.db)' : ''}`
+				: '';
+			this.status.tooltip = `${summary}\nGenerated ${this.state.loaded.generatedUtc}${from}\nClick to rebuild (boots the engine).`;
 		} else {
 			this.status.text = '$(warning) DreamFX: no index';
 			this.status.tooltip = `${this.state.problem ?? 'no index'}\nClick to build one (boots the engine).`;

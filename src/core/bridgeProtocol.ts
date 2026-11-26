@@ -108,19 +108,45 @@ export interface BridgePaths {
 	requests: string;
 	responses: string;
 	status: string;
-	diagnostics: string;
 }
 
-/** Everything lives under Saved/, which is already outside version control. */
-export function bridgePaths(projectDir: string, join: (...parts: string[]) => string): BridgePaths {
-	const root = join(projectDir, 'Saved', 'DreamFX', 'Bridge');
+function pathsUnder(root: string, join: (...parts: string[]) => string): BridgePaths {
 	return {
 		root,
 		requests: join(root, 'Requests'),
 		responses: join(root, 'Responses'),
 		status: join(root, 'status.json'),
-		diagnostics: join(root, 'diagnostics.json'),
 	};
+}
+
+/**
+ * Where the bridge lives: `<Project>/Intermediate/DreamSource/FX/Bridge`, beside the rest of what the
+ * editor generates for this language (DreamSource layout, spec 13.5). Outside version control either
+ * way. The last diagnostics, which used to sit beside it as `diagnostics.json`, are in `fx.db` now.
+ */
+export function bridgePaths(projectDir: string, join: (...parts: string[]) => string): BridgePaths {
+	return pathsUnder(join(projectDir, 'Intermediate', 'DreamSource', 'FX', 'Bridge'), join);
+}
+
+/** Where a plugin from before the DreamSource layout keeps it: `<Project>/Saved/DreamFX/Bridge`. */
+export function legacyBridgePaths(projectDir: string, join: (...parts: string[]) => string): BridgePaths {
+	return pathsUnder(join(projectDir, 'Saved', 'DreamFX', 'Bridge'), join);
+}
+
+/**
+ * The bridge to talk to: the new one when its editor has written a status there, else the old one
+ * when an older plugin has, else the new one (nobody is listening yet, and the new place is where the
+ * next editor will be). `status.json` exists only while an editor runs, which is what makes it the
+ * signal rather than the folder.
+ */
+export function chooseBridgePaths(projectDir: string, join: (...parts: string[]) => string,
+	exists: (target: string) => boolean): BridgePaths {
+	const current = bridgePaths(projectDir, join);
+	if (exists(current.status)) {
+		return current;
+	}
+	const legacy = legacyBridgePaths(projectDir, join);
+	return exists(legacy.status) ? legacy : current;
 }
 
 /**

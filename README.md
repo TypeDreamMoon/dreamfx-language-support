@@ -1,7 +1,7 @@
 # DreamFXLang Language Support
 
 [![version](https://img.shields.io/github/package-json/v/TypeDreamMoon/dreamfx-language-support?color=blue)](CHANGELOG.md)
-[![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
+[![vscode](https://img.shields.io/badge/VS%20Code-%5E1.147-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Editor support for [DreamFX](https://github.com/TypeDreamMoon/DreamFX) — the text language that
@@ -48,7 +48,9 @@ well, and recognises the structure of every one.
 
 ## The module index
 
-Completion and hover read `DFX/.dfx-index.json`, which the plugin exports:
+Completion and hover read the module index the plugin exports into the FX source folder —
+`DreamSource/FX/.dreamfx/index.db`, or the `.dfx-index.json` an older plugin writes (see
+[The DreamSource layout](#the-dreamsource-layout)):
 
 ```bash
 pwsh -File .skill/dfx.ps1 index
@@ -65,6 +67,60 @@ changes. A table written into this extension would be wrong on the first day.
 The index records the engine path and the enabled plugin list, because those are what invalidate it.
 Nothing compares them yet — that needs a live editor to compare against — so the status bar shows
 when the index was generated and rebuilding is one click.
+
+## The DreamSource layout
+
+Dream plugins keep their text sources together under one `DreamSource/` folder instead of a
+`D`-prefixed folder each at the project root. For DreamFX:
+
+| What | Where | Before DreamSource (still read) |
+| --- | --- | --- |
+| The project's sources | `DreamSource/FX/` — configurable | `DFX/` |
+| A plugin's sources | `<Plugin>/DreamSource/FX/` | `<Plugin>/DFX/` |
+| The module index | `<FX folder>/.dreamfx/index.db` | `<FX folder>/.dfx-index.json` |
+| The editor's last diagnostics | `Intermediate/DreamSource/fx.db` | `Saved/DreamFX/Bridge/diagnostics.json` |
+| The editor bridge | `Intermediate/DreamSource/FX/Bridge/` | `Saved/DreamFX/Bridge/` |
+
+**Where the project's sources are** comes from `Config/DefaultDreamSource.ini` — the file the
+plugin's *Project Settings → Dream Source → FX* page writes:
+
+```ini
+[/Script/DreamFXEditor.DreamFXSourceSettings]
+SourceDirectory=(Path="DreamSource/FX")
+```
+
+A bare `SourceDirectory=DreamSource/FX` works too. The path is relative to the project; an absolute
+or empty one is ignored and the default `DreamSource/FX` used. The extension watches the file and
+re-resolves when it changes. Plugin folders are not configurable.
+
+A file is treated as a DreamFX source because it sits under one of those folders — the project's
+and each plugin's — not because some folder in its path is called `DFX` or `FX`. New Source File
+offers exactly those folders, and creates the configured one when the project has none yet.
+
+**A legacy `DFX/` keeps working, permanently.** When the configured folder does not exist and `DFX/`
+does, `DFX/` is used and the extension says once that it is deprecated, with **Migrate to
+DreamSource** and **Don't show again** (remembered per project). When both exist the configured one
+is used and you are told `DFX/` is being ignored. A plugin still on `DFX/` is only noted in the output.
+
+**`DreamFX: Migrate to DreamSource`** moves `DFX/` to the configured folder — the whole folder,
+including a `.git` inside it, so a `DFX/` that is its own repository stays one. It rewrites the
+relative folder paths in its `DreamFX.code-workspace` for the new location and deletes the old
+`Saved/DreamFX/Bridge/`. It refuses while the Unreal Editor has the project open (close it first:
+the editor resolves the folder when it starts) and when the target already exists (that would be a
+merge, which is yours to do). It changes no source, and it does not convert `.dfx-index.json` into
+`index.db`: the plugin imports it on its next index run, and until then the JSON, which moved with the
+folder, is what completion reads.
+
+**The databases** are read with the `node:sqlite` that VS Code 1.147 ships, read-only, which is why
+that is now the minimum version. A database is re-read only when its `meta` revision moved. One of
+a schema this extension does not know is not read at all, and you are told to update the extension
+or the plugin. When there is no database — an older plugin — the JSON files are read as before.
+
+What the editor records in `fx.db` (the diagnostics of its most recent bridge request, whoever sent
+it) is mirrored into Problems, including the record already there when the window opens — but only
+for files not changed since it was made, since an edited file's lines may no longer match. Each file
+shows its newest result: an entry that repeats what verify-on-save already shows is not added twice,
+one that differs (someone compiled the file since) replaces it, and a later verify of the file wins.
 
 ## The curve editor
 
@@ -174,7 +230,9 @@ save the same package the later save silently wins and the earlier work is gone 
 anywhere. With an editor up the bridge is not the faster route, it is the only correct one — which
 is why the write-conflict warning appears on the CLI route and not on this one.
 
-It works through files in `<Project>/Saved/DreamFX/Bridge/`, so there is no port to pick and no
+It works through files in `<Project>/Intermediate/DreamSource/FX/Bridge/` (`Saved/DreamFX/Bridge/` with a
+plugin from before DreamSource; whichever an editor has written its `status.json` into is the one
+used), so there is no port to pick and no
 firewall prompt, and it needs the plugin's `FBridgeService`. Without it nothing changes: no
 `status.json` means no editor, and every command takes the CLI route it always did.
 
@@ -218,7 +276,7 @@ npm install && npm run package
 ## Use
 
 The plugin can generate a workspace for you — **Tools → DreamFX → Open Workspace** in the Unreal
-Editor writes `DFX/DreamFX.code-workspace` with the project and every plugin's source root as
+Editor writes `DreamSource/FX/DreamFX.code-workspace` with the project and every plugin's source root as
 folders, and the file associations already pointing at this extension.
 
 Commands (`Ctrl+Shift+P`):
@@ -236,6 +294,7 @@ Commands (`Ctrl+Shift+P`):
 | `DreamFXLang: Adopt This Asset` | Make the text the source of truth. Needs the bridge |
 | `DreamFXLang: Pull Values from Asset (needs the editor)` | Write values changed in the Niagara editor back into the `.dfs`, via a diff. Needs the bridge; **does not save** |
 | `DreamFXLang: Editor Bridge Status` | Which route commands take, and a ping |
+| `DreamFX: Migrate to DreamSource` | Move a legacy `DFX/` into `DreamSource/FX/`. Refuses while the editor is running |
 
 `verify` and `build` are also contributed as tasks, so `tasks.json` can bind them to a key or run
 them as the default build task:
@@ -281,7 +340,7 @@ npm test
 ```
 
 The extension is two processes. `src/server/` is a standard LSP server — completion, hover, the
-outline and the lexical diagnostics, plus the `.dfx-index.json` it reads them from. `src/extension.ts`
+outline and the lexical diagnostics, plus the module index it reads them from. `src/extension.ts`
 is the client: builds, verifies, asset actions and the editor bridge, none of which the protocol has
 anything to say about. The language core under `src/core/` imports nothing from `vscode` and nothing
 from the protocol either, which is what let the server be lifted out of the providers unchanged.
@@ -298,6 +357,13 @@ flagged on a source the compiler accepts, and nothing but DFX1xxx claimed on one
 
 ```bash
 DREAMFX_CORPUS_DIR=/path/to/Plugins/DreamFX npm test
+```
+
+And to check that a real project's module index and editor diagnostics come back unchanged through
+`index.db` and `fx.db` (its files are only read; the databases are built in a temp folder):
+
+```bash
+DREAMFX_PROJECT_DIR=/path/to/Project npm test
 ```
 
 ## Links
