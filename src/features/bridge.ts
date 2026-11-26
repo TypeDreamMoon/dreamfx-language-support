@@ -16,13 +16,16 @@ import * as vscode from 'vscode';
 
 import {
 	BridgeAction,
+	BridgePaths,
 	BridgeRequestExtra,
 	BridgeResponse,
 	BridgeStatus,
 	Liveness,
 	bridgePaths,
 	buildRequest,
+	legacyBridgePaths,
 	canServe,
+	chooseBridgePaths,
 	livenessOf,
 	makeRequestId,
 	parseResponse,
@@ -71,13 +74,35 @@ export class BridgeClient {
 		}
 	}
 
+	/** Whichever bridge an editor is on: the DreamSource one, or a pre-DreamSource plugin's. */
+	paths(projectDir: string): BridgePaths {
+		return chooseBridgePaths(projectDir, path.join, fs.existsSync);
+	}
+
 	readStatus(projectDir: string): BridgeStatus | undefined {
-		const paths = bridgePaths(projectDir, path.join);
+		const paths = this.paths(projectDir);
 		try {
 			return parseStatus(fs.readFileSync(paths.status, 'utf8'));
 		} catch {
 			return undefined;
 		}
+	}
+
+	/**
+	 * Whether an editor may have this project open, on either bridge -- what a migration refuses on.
+	 * Stricter than `route`: an editor that stopped answering but whose process still exists is still
+	 * holding the source folder, so only a bridge that is plainly closed counts as no editor.
+	 */
+	editorMayBeRunning(projectDir: string): boolean {
+		return [bridgePaths(projectDir, path.join), legacyBridgePaths(projectDir, path.join)].some((paths) => {
+			let status: BridgeStatus | undefined;
+			try {
+				status = parseStatus(fs.readFileSync(paths.status, 'utf8'));
+			} catch {
+				return false;
+			}
+			return livenessOf(status, Date.now(), isProcessAlive) !== 'closed';
+		});
 	}
 
 	liveness(projectDir: string): Liveness {
@@ -101,7 +126,7 @@ export class BridgeClient {
 		timeoutMs: number = DEFAULT_TIMEOUT_MS,
 		token?: vscode.CancellationToken,
 	): Promise<BridgeSendResult> {
-		const paths = bridgePaths(projectDir, path.join);
+		const paths = this.paths(projectDir);
 		const requestId = makeRequestId(Date.now());
 		const request = buildRequest(requestId, action, extra);
 

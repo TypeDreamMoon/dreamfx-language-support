@@ -1,12 +1,17 @@
 /**
- * The three things the server has to answer for itself now that there is no `vscode.workspace`.
+ * The things the server has to answer for itself now that there is no `vscode.workspace`: which
+ * Unreal project a file belongs to, and where that project's FX sources are.
  *
- * Finding a DFX root and finding the index inside one used to be `vscode.workspace.findFiles`, which
- * respects the user's `files.exclude` and is backed by a real index. Nothing like that exists here,
- * so the scan below is deliberately small: it walks the workspace folders looking for a directory
- * named `DFX`, refuses to go deep, and skips the directories that are always noise. A plugin-generated
- * workspace puts each DFX root within a couple of levels of a folder root, so the cap costs nothing
- * real -- and an uncapped walk of an Unreal project would be a very expensive way to find nothing.
+ * Where the sources are is the DreamSource layout's question (core/dreamSource.ts), asked of the
+ * project: its configured directory from `Config/DefaultDreamSource.ini`, its legacy `DFX/`, and each
+ * plugin's root. A file is a DreamFX source when it sits under one of those -- never because some
+ * folder in its path happens to be called `DFX` (spec 7). The client resolves with the same module,
+ * so the two halves cannot disagree about it.
+ *
+ * Finding the project is a walk up to the nearest `.uproject`, which is the same walk `dfx.ps1` and the
+ * bridge do. A workspace folder that is *above* a project (a folder of several projects, say) gets a
+ * short walk down instead: deliberately shallow, skipping the directories that are always noise,
+ * because an uncapped walk of an Unreal tree is a very expensive way to find nothing.
  */
 
 import * as fs from 'fs';
@@ -14,15 +19,15 @@ import * as path from 'path';
 
 import { URI } from 'vscode-uri';
 
-export const INDEX_FILE_NAME = '.dfx-index.json';
+import { ProjectLayout, findProjectRoot, nodeFs, resolveProjectLayout } from '../core';
 
-/** How far below a workspace folder a `DFX` directory is still worth looking for. */
-const MAX_SCAN_DEPTH = 4;
+/** How far below a workspace folder a `.uproject` is still worth looking for. */
+const MAX_SCAN_DEPTH = 3;
 
-/** Directories that never contain a DFX root and are expensive to walk. */
+/** Directories that never contain a project and are expensive to walk. */
 const SKIPPED_DIRECTORIES = new Set([
 	'node_modules', '.git', '.vs', '.vscode', '.idea',
-	'Binaries', 'Intermediate', 'DerivedDataCache', 'Saved',
+	'Binaries', 'Intermediate', 'DerivedDataCache', 'Saved', 'Content', 'Plugins',
 ]);
 
 /**
@@ -50,63 +55,99 @@ export function toUri(fsPath: string): string {
 	return URI.file(fsPath).toString();
 }
 
-/**
- * The `DFX` directory a file lives under, if any.
- *
- * Kept as a path split rather than a walk up the filesystem because it has to work for paths that
- * do not exist yet -- `indexDestination` asks it where an index *would* go.
- */
-export function enclosingDfxRoot(filePath: string): string | undefined {
-	const parts = filePath.split(/[\\/]/);
-	const index = parts.lastIndexOf('DFX');
-	return index === -1 ? undefined : parts.slice(0, index + 1).join(path.sep);
-}
-
-/** Every `DFX/.dfx-index.json` under the given folders, nearest-first within each folder. */
-export function findIndexFiles(folderPaths: readonly string[], limit: number): string[] {
+/** Every directory holding a `.uproject` at or below each folder, nearest-first, up to `limit`. */
+export function findProjectsBelow(folderPaths: readonly string[], limit: number): string[] {
 	const found: string[] = [];
-
+	const scan = (directory: string, depth: number): void => {
+		if (depth > MAX_SCAN_DEPTH || found.length >= limit) {
+			return;
+		}
+		let entries: fs.Dirent[];
+		try {
+			entries = fs.readdirSync(directory, { withFileTypes: true });
+		} catch {
+			// Unreadable directories are a fact of life on a project tree; they are not an error here.
+			return;
+		}
+		if (entries.some((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.uproject'))) {
+			found.push(directory);
+			return; // a project does not hold projects
+		}
+		for (const entry of entries) {
+			if (entry.isDirectory() && !SKIPPED_DIRECTORIES.has(entry.name) && !entry.name.startsWith('.')) {
+				scan(path.join(directory, entry.name), depth + 1);
+			}
+		}
+	};
 	for (const folder of folderPaths) {
-		scan(folder, 0, found, limit);
+		scan(folder, 0);
 		if (found.length >= limit) {
 			break;
 		}
 	}
-
 	return found;
 }
 
-function scan(directory: string, depth: number, found: string[], limit: number): void {
-	if (depth > MAX_SCAN_DEPTH || found.length >= limit) {
-		return;
+/**
+ * Projects and their layouts, cached until told otherwise: the answers move only when the ini is
+ * edited or a migration moves a folder, and both of those arrive as an `invalidate`.
+ */
+export class SourceLayouts {
+	private readonly projectByDirectory = new Map<string, string | undefined>();
+	private readonly layoutByProject = new Map<string, ProjectLayout>();
+	private folderPaths: readonly string[] = [];
+	private workspaceProjects?: string[];
+
+	setWorkspaceFolders(folderPaths: readonly string[]): void {
+		this.folderPaths = folderPaths;
+		this.invalidate();
 	}
 
-	let entries: fs.Dirent[];
-	try {
-		entries = fs.readdirSync(directory, { withFileTypes: true });
-	} catch {
-		// Unreadable directories are a fact of life on a project tree; they are not an error here.
-		return;
+	invalidate(): void {
+		this.projectByDirectory.clear();
+		this.layoutByProject.clear();
+		this.workspaceProjects = undefined;
 	}
 
-	for (const entry of entries) {
-		if (!entry.isDirectory() || SKIPPED_DIRECTORIES.has(entry.name)) {
-			continue;
+	/** The project a file belongs to: the nearest `.uproject` above it. */
+	projectFor(fsPath: string): string | undefined {
+		const directory = path.dirname(fsPath);
+		if (!this.projectByDirectory.has(directory)) {
+			this.projectByDirectory.set(directory, findProjectRoot(directory, nodeFs, path.dirname));
 		}
+		return this.projectByDirectory.get(directory);
+	}
 
-		const child = path.join(directory, entry.name);
-		if (entry.name === 'DFX') {
-			const candidate = path.join(child, INDEX_FILE_NAME);
-			if (fs.existsSync(candidate)) {
-				found.push(candidate);
-				if (found.length >= limit) {
-					return;
+	/**
+	 * The projects of the workspace: each folder's own (walking up), else any a short walk down finds.
+	 * The generated workspace lists the FX root and each plugin's as separate folders, which all walk
+	 * up to one project.
+	 */
+	projects(): string[] {
+		if (!this.workspaceProjects) {
+			const found: string[] = [];
+			const add = (project: string | undefined): void => {
+				if (project && !found.includes(project)) {
+					found.push(project);
 				}
+			};
+			for (const folder of this.folderPaths) {
+				add(findProjectRoot(folder, nodeFs, path.dirname));
 			}
-			// A DFX root does not nest inside another one, so there is nothing below this worth walking.
-			continue;
+			if (found.length === 0) {
+				findProjectsBelow(this.folderPaths, 8).forEach(add);
+			}
+			this.workspaceProjects = found;
 		}
+		return this.workspaceProjects;
+	}
 
-		scan(child, depth + 1, found, limit);
+	layout(projectDir: string): ProjectLayout {
+		let layout = this.layoutByProject.get(projectDir);
+		if (!layout) {
+			layout = resolveProjectLayout(projectDir, nodeFs, path.join);
+			this.layoutByProject.set(projectDir, layout);
+		}
+		return layout;
 	}
 }

@@ -34,7 +34,9 @@ import {
 	INDEX_DESTINATION_REQUEST,
 	INDEX_STATE_NOTIFICATION,
 	IndexDestinationParams,
+	IndexDestination,
 	IndexStateParams,
+	LAYOUT_CHANGED_NOTIFICATION,
 	RELOAD_INDEX_NOTIFICATION,
 } from '../lspProtocol';
 import { AnalysisCache } from './analysisCache';
@@ -43,7 +45,15 @@ import { completionAt, hoverAt } from './completion';
 import { syntaxDiagnostics } from './diagnostics';
 import { SchemaIndexCache } from './schemaIndex';
 import { documentSymbols } from './symbols';
-import { INDEX_FILE_NAME, toFsPath } from './workspace';
+import { SourceLayouts, toFsPath } from './workspace';
+
+/**
+ * What the server watches itself, inside the workspace folders: the index in both its forms, and the
+ * ini that says where the source folder is. Never `index.db-shm`: every reader touches it, so a watch
+ * on it would make each check trigger the next. The client covers roots outside the folders.
+ */
+const WATCHED_INDEX_GLOBS = ['**/.dfx-index.json', '**/.dreamfx/{index.db,index.db-wal}'];
+const WATCHED_SETTINGS_GLOB = '**/Config/DefaultDreamSource.ini';
 
 const DEBOUNCE_MS = 250;
 
@@ -58,8 +68,10 @@ const documents = new TextDocuments(TextDocument);
 const analyses = new AnalysisCache();
 
 const indexes = new SchemaIndexCache(
+	new SourceLayouts(),
 	(message) => connection.console.log(message),
-	(state: IndexStateParams) => void connection.sendNotification(INDEX_STATE_NOTIFICATION, state));
+	(state: IndexStateParams) => void connection.sendNotification(INDEX_STATE_NOTIFICATION, state),
+	(message) => void connection.window.showWarningMessage(message));
 
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
@@ -125,12 +137,18 @@ connection.onInitialized(() => {
 		// The index is written by an engine run, not by the editor, so a watcher is the only way to
 		// notice it landing -- and it lands minutes after the command was issued.
 		connection.client.register(DidChangeWatchedFilesNotification.type, {
-			watchers: [{ globPattern: `**/DFX/${INDEX_FILE_NAME}` }],
+			watchers: [...WATCHED_INDEX_GLOBS, WATCHED_SETTINGS_GLOB].map((globPattern) => ({ globPattern })),
 		}).catch((error: unknown) => connection.console.warn(`could not watch the index: ${String(error)}`));
 	}
 });
 
-connection.onDidChangeWatchedFiles(() => indexes.invalidateAll());
+connection.onDidChangeWatchedFiles((params) => {
+	if (params.changes.some((change) => /[\\/]DefaultDreamSource\.ini$/i.test(toFsPath(change.uri) ?? change.uri))) {
+		indexes.invalidateLayout();
+	} else {
+		indexes.refresh();
+	}
+});
 
 connection.onDidChangeConfiguration(() => {
 	void refreshSettings().then(() => {
@@ -169,11 +187,13 @@ connection.onCodeLens((params): CodeLens[] => {
 
 // ------------------------------------------------------------- custom messages
 
-connection.onRequest(INDEX_DESTINATION_REQUEST, (params: IndexDestinationParams): string | null => {
+connection.onRequest(INDEX_DESTINATION_REQUEST, (params: IndexDestinationParams): IndexDestination | null => {
 	return indexes.destinationFor(params.activeUri ? toFsPath(params.activeUri) : undefined) ?? null;
 });
 
-connection.onNotification(RELOAD_INDEX_NOTIFICATION, () => indexes.invalidateAll());
+connection.onNotification(RELOAD_INDEX_NOTIFICATION, () => indexes.refresh());
+
+connection.onNotification(LAYOUT_CHANGED_NOTIFICATION, () => indexes.invalidateLayout());
 
 connection.onNotification(ACTIVE_DOCUMENT_NOTIFICATION, (params: ActiveDocumentParams) => {
 	const state = indexes.describe(params.uri ? toFsPath(params.uri) : undefined);

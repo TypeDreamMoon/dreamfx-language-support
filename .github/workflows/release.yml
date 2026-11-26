@@ -60,7 +60,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -75,7 +75,7 @@ jobs:
       # A .vsix that ships a broken grammar or an unregistered command installs cleanly and then
       # does nothing, so the gate is in front of the package step rather than after it.
       - name: Test
-        run: node --test out/test/
+        run: node --test "out/test/**/*.test.js"
 
       - name: Package VSIX
         run: npx @vscode/vsce package

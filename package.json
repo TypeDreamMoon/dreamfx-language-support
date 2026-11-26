@@ -2,7 +2,7 @@
   "name": "dreamfxlang-language-support",
   "displayName": "DreamFXLang Language Support",
   "description": "Language support for DreamFXLang .dfs systems, .dfe emitters and .dfm modules.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "typedreammoon",
   "author": {
     "name": "TypeDreamMoon",
@@ -17,7 +17,7 @@
   "copyright": "Copyright (c) 2026 TypeDreamMoon. All rights reserved.",
   "icon": "resources/icon.png",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.147.0"
   },
   "categories": [
     "Programming Languages",
@@ -149,6 +149,10 @@
       {
         "command": "dreamfx.showOutput",
         "title": "DreamFXLang: Show Output Channel"
+      },
+      {
+        "command": "dreamfx.migrateToDreamSource",
+        "title": "DreamFX: Migrate to DreamSource"
       }
     ],
     "menus": {
@@ -229,7 +233,7 @@
               "all"
             ],
             "default": "file",
-            "description": "Run on the active file, or on every source under every DFX root."
+            "description": "Run on the active file, or on every source under every FX source root (DreamSource/FX, or a legacy DFX/)."
           },
           "force": {
             "type": "boolean",
@@ -313,7 +317,7 @@
     "bundle:watch": "node esbuild.js --watch",
     "build": "npm run compile && npm run bundle",
     "pretest": "npm run build",
-    "test": "node --test out/test/",
+    "test": "node --test \"out/test/**/*.test.js\"",
     "package": "npm run compile && node esbuild.js --production && npx @vscode/vsce package",
     "vscode:prepublish": "npm run compile && node esbuild.js --production"
   },

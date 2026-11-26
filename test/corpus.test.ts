@@ -17,7 +17,9 @@ import { test } from 'node:test';
 
 import { contextAt } from '../src/core/context';
 import { findCurveLiterals, formatKey, planCurveEdit, sameKey } from '../src/core/curveLiteral';
-import { parseSchemaIndex } from '../src/core/schemaIndex';
+import { nodeFs, resolveProjectSourceRoot } from '../src/core/dreamSource';
+import { isSqliteAvailable, readIndexDatabase } from '../src/core/fxDatabase';
+import { parseSchemaIndex, validateSchemaIndex } from '../src/core/schemaIndex';
 import { analyze } from '../src/core/structure';
 
 const CORPUS = process.env.DREAMFX_CORPUS_DIR;
@@ -143,11 +145,18 @@ test('a curve the compiler refuses for its spelling is refused by the curve edit
 test('the exported index answers a real completion query', { skip: CORPUS ? false : 'DREAMFX_CORPUS_DIR is not set' }, () => {
 	const indexPath = findIndex(CORPUS!);
 	if (!indexPath) {
-		console.log('  no .dfx-index.json under the corpus dir; run `dfx index` to produce one');
+		console.log('  no .dreamfx/index.db or .dfx-index.json under the corpus dir; run `dfx index` to produce one');
 		return;
 	}
 
-	const parsed = parseSchemaIndex(fs.readFileSync(indexPath, 'utf8'));
+	let parsed: ReturnType<typeof parseSchemaIndex>;
+	if (indexPath.endsWith('.db')) {
+		const read = readIndexDatabase(indexPath);
+		assert.equal(read.kind, 'ok', `${indexPath} did not read`);
+		parsed = validateSchemaIndex(read.kind === 'ok' ? read.value.index : undefined);
+	} else {
+		parsed = parseSchemaIndex(fs.readFileSync(indexPath, 'utf8'));
+	}
 	assert.ok('index' in parsed, `index did not load: ${'error' in parsed ? parsed.error : ''}`);
 	const index = parsed.index;
 
@@ -177,13 +186,17 @@ test('the exported index answers a real completion query', { skip: CORPUS ? fals
 	console.log(`  index: ${index.modules.length} modules, ${offered.length} offerable in ParticleUpdate`);
 });
 
+/** The corpus dir's index: under its resolved FX root (database first), else at the dir itself. */
 function findIndex(root: string): string | undefined {
-	const direct = path.join(root, 'DFX', '.dfx-index.json');
-	if (fs.existsSync(direct)) {
-		return direct;
+	const candidates: string[] = [];
+	for (const sourceDir of [resolveProjectSourceRoot(root, nodeFs, path.join).directory, root]) {
+		if (isSqliteAvailable()) {
+			candidates.push(path.join(sourceDir, '.dreamfx', 'index.db'));
+		}
+		candidates.push(path.join(sourceDir, '.dfx-index.json'));
 	}
-	const nested = path.join(root, '.dfx-index.json');
-	return fs.existsSync(nested) ? nested : undefined;
+	return candidates.find((candidate) => fs.existsSync(candidate)
+		&& (!candidate.endsWith('.db') || readIndexDatabase(candidate).kind === 'ok'));
 }
 
 function collect(root: string, negative = false): string[] {

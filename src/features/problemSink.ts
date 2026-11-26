@@ -28,14 +28,28 @@ export class ProblemSink implements vscode.Disposable {
 	 */
 	constructor(name = 'dreamfxlang-dfx') {
 		this.collection = vscode.languages.createDiagnosticCollection(name);
+		this.onDidPublish = this.published.event;
 	}
 
 	dispose(): void {
 		this.collection.dispose();
+		this.published.dispose();
 	}
+
+	/**
+	 * Fires after `publish` with every file whose entries it set or cleared, so another sink that
+	 * reports on the same files can stand down for them.
+	 */
+	readonly onDidPublish: vscode.Event<readonly string[]>;
+	private readonly published = new vscode.EventEmitter<readonly string[]>();
 
 	forget(uri: vscode.Uri): void {
 		this.collection.delete(uri);
+	}
+
+	/** What this sink shows for `file` right now. */
+	entries(file: string): readonly vscode.Diagnostic[] {
+		return this.collection.get(vscode.Uri.file(file)) ?? [];
 	}
 
 	/**
@@ -75,13 +89,15 @@ export class ProblemSink implements vscode.Disposable {
 			}
 		}
 
-		for (const previous of this.reported.get(rootFile) ?? []) {
-			this.collection.delete(vscode.Uri.file(previous));
+		const previous = this.reported.get(rootFile) ?? [];
+		for (const file of previous) {
+			this.collection.delete(vscode.Uri.file(file));
 		}
 		for (const [target, entries] of found) {
 			this.collection.set(vscode.Uri.file(target), entries);
 		}
 		this.reported.set(rootFile, [...found.keys()]);
+		this.published.fire([...new Set([rootFile, ...previous, ...found.keys()])]);
 
 		return diagnostics.length;
 	}

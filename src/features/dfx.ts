@@ -136,11 +136,15 @@ export class DfxRunner {
 	/**
 	 * The index export.
 	 *
-	 * Not a `DfxCommand` because it is not a check: it reads the module library and writes one JSON
-	 * file, touching no package. Safe with the editor open, and still an explicit command because it
-	 * boots the engine like everything else here.
+	 * Not a `DfxCommand` because it is not a check: it reads the module library and writes the index,
+	 * touching no package. Safe with the editor open, and still an explicit command because it boots
+	 * the engine like everything else here.
+	 *
+	 * @param out where to write, as `-Out`; undefined for the plugin's own default -- the project's
+	 *        `.dreamfx/index.db`, or `DFX/.dfx-index.json` from a plugin before DreamSource -- which is
+	 *        what the language server reads.
 	 */
-	async createIndexTask(destination: string, document?: vscode.TextDocument): Promise<vscode.Task | undefined> {
+	async createIndexTask(out: string | undefined, document?: vscode.TextDocument): Promise<vscode.Task | undefined> {
 		const script = await this.findScript(document);
 		if (!script) {
 			void vscode.window.showErrorMessage(
@@ -153,7 +157,7 @@ export class DfxRunner {
 
 		const execution = new vscode.ProcessExecution(
 			shell,
-			['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, 'index', '-Out', destination],
+			['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, 'index', ...(out ? ['-Out', out] : [])],
 			{ cwd });
 
 		const task = new vscode.Task(
@@ -171,7 +175,7 @@ export class DfxRunner {
 			showReuseMessage: false,
 		};
 
-		this.output.appendLine(`${shell} -File ${script} index -Out ${destination}   (cwd ${cwd})`);
+		this.output.appendLine(`${shell} -File ${script} index${out ? ` -Out ${out}` : ''}   (cwd ${cwd})`);
 		return task;
 	}
 
