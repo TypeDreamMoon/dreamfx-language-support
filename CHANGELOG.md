@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.8.0
+
+### The DreamSource layout
+
+FX sources move from `DFX/` to `DreamSource/FX/`, alongside the other Dream languages, and what the
+editor generates moves into SQLite databases (the DreamSource layout spec, section 13). The old
+places keep working; nothing has to be moved for this version to work.
+
+- **The source folder is resolved, not guessed.** The project's comes from `SourceDirectory` in
+  `Config/DefaultDreamSource.ini` (`[/Script/DreamFXEditor.DreamFXSourceSettings]`, either
+  `(Path="...")` or a bare path, relative only; default `DreamSource/FX`), falling back to a legacy
+  `DFX/` while that is the only one there. Each plugin's is `<Plugin>/DreamSource/FX`, else
+  `<Plugin>/DFX`. The ini is watched. Every place that looked for a folder named `DFX` -- the server's
+  index lookup, its watchers, New Source File -- now asks whether a file is under one of those roots,
+  so `Content/FX/` or a stray `DFX` folder is no longer mistaken for sources.
+- **The module index is read from `<FX folder>/.dreamfx/index.db`**, put back together into exactly
+  the object `.dfx-index.json` held, and from the JSON when the database is missing or has no modules
+  yet. A plugin's sources use the project's index unless the plugin has one of its own. Watched as the
+  database and its `-wal`; a change only re-reads the index when `meta`'s modules revision moved.
+  **Rebuild Module Index** no longer passes `-Out` for the project, so the plugin writes its default.
+- **The editor's diagnostics are read from `Intermediate/DreamSource/fx.db`**, or the old
+  `Saved/DreamFX/Bridge/diagnostics.json`, and mirrored into Problems in a collection of their own:
+  on opening too, for files not changed since the record was made, and newest result per file
+  against verify-on-save, so this window's own request does not show twice.
+- **A database of an unknown schema is refused**, with a message to update the extension or the plugin.
+- **The bridge is found in `Intermediate/DreamSource/FX/Bridge/`** when an editor has written its
+  `status.json` there, else in `Saved/DreamFX/Bridge/` for an older plugin.
+- **A notice when the project is still on `DFX/`**, once per project, with **Migrate to DreamSource**
+  and **Don't show again**; and one when both folders exist and `DFX/` is being ignored.
+- **`DreamFX: Migrate to DreamSource`** moves `DFX/` (with any `.git` inside) to the configured folder,
+  rewrites the relative paths in its `DreamFX.code-workspace`, and deletes `Saved/DreamFX/Bridge/`.
+  It refuses while the editor has the project open or when the target exists, changes no source, and
+  leaves the index JSON for the plugin to import.
+
+### Requirements
+
+- **VS Code 1.147 or later.** The databases are read with the `node:sqlite` it ships.
+- The tests run with `node --test "out/test/**/*.test.js"` and need Node 22.13 or later for the
+  database tests (CI now uses Node 24). `DREAMFX_PROJECT_DIR=<project>` additionally checks that a
+  real project's index and diagnostics survive a trip through the databases.
+
 ## 0.7.0
 
 ### Pull values from the asset

@@ -1,7 +1,7 @@
 # DreamFXLang Language Support
 
 [![version](https://img.shields.io/github/package-json/v/TypeDreamMoon/dreamfx-language-support?color=blue)](CHANGELOG.md)
-[![vscode](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC)](https://code.visualstudio.com/)
+[![vscode](https://img.shields.io/badge/VS%20Code-%5E1.147-007ACC)](https://code.visualstudio.com/)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 [DreamFX](https://github.com/TypeDreamMoon/DreamFX) 的编辑器支持 —— 用 `.dfs` / `.dfe` / `.dfm`
@@ -44,7 +44,8 @@
 
 ## 模块索引
 
-补全与 hover 读的是插件导出的 `DFX/.dfx-index.json`:
+补全与 hover 读的是插件导出到 FX 源码目录里的模块索引 —— `DreamSource/FX/.dreamfx/index.db`,
+旧插件则是 `.dfx-index.json`(见 [DreamSource 目录规范](#dreamsource-目录规范)):
 
 ```bash
 pwsh -File .skill/dfx.ps1 index
@@ -59,6 +60,47 @@ pwsh -File .skill/dfx.ps1 index
 
 索引记录了引擎路径与已启用插件列表,因为正是这两样让它失效。目前**没有任何东西去比对它们** ——
 那需要一个活着的编辑器来比 —— 所以状态栏只显示索引是什么时候生成的,重建是一次点击。
+
+## DreamSource 目录规范
+
+Dream 系列插件的文本源码统一收进一个 `DreamSource/` 目录,不再在项目根目录各放一个 `D` 前缀目录。DreamFX 的部分:
+
+| 内容 | 位置 | DreamSource 之前(仍然兼容) |
+| --- | --- | --- |
+| 项目的源码 | `DreamSource/FX/`,可配置 | `DFX/` |
+| 插件自带的源码 | `<Plugin>/DreamSource/FX/` | `<Plugin>/DFX/` |
+| 模块索引 | `<FX 源码目录>/.dreamfx/index.db` | `<FX 源码目录>/.dfx-index.json` |
+| 编辑器最近一次的诊断 | `Intermediate/DreamSource/fx.db` | `Saved/DreamFX/Bridge/diagnostics.json` |
+| 编辑器桥 | `Intermediate/DreamSource/FX/Bridge/` | `Saved/DreamFX/Bridge/` |
+
+**项目的源码目录**读自 `Config/DefaultDreamSource.ini`(插件的 *Project Settings → Dream Source → FX* 写的就是它):
+
+```ini
+[/Script/DreamFXEditor.DreamFXSourceSettings]
+SourceDirectory=(Path="DreamSource/FX")
+```
+
+也可以写成裸字符串 `SourceDirectory=DreamSource/FX`。路径相对项目目录;绝对路径或空值视为无效,按默认
+`DreamSource/FX` 处理。扩展会监听这个文件,改了就重新解析。插件的源码目录不可配置。
+
+判断一个文件是不是 DreamFX 源码,看它是否在这些目录(项目的和每个插件的)之下,而不是看路径里有没有叫
+`DFX` 或 `FX` 的文件夹。新建源文件也只提供这些目录;项目还没有源码目录时,建在配置的目录里。
+
+**旧的 `DFX/` 永久可用。** 配置的目录不存在而 `DFX/` 存在时,照用 `DFX/`,并提示一次已废弃,带
+**Migrate to DreamSource** 和 **Don't show again**(按项目记住)。两个都存在时用配置的目录,并提示 `DFX/`
+已被忽略。插件还在用 `DFX/` 的只写进输出面板。
+
+**`DreamFX: Migrate to DreamSource`** 把 `DFX/` 整个移到配置的目录(包括里面的 `.git`,独立仓库照样能迁),
+改写其中 `DreamFX.code-workspace` 的相对路径,并删除旧的 `Saved/DreamFX/Bridge/`。Unreal 编辑器开着这个项目时
+拒绝(先关编辑器,它在启动时解析目录);目标已存在时拒绝(那是合并,由你来做)。不改任何源码,也不把
+`.dfx-index.json` 转成 `index.db`:插件下次跑 index 时会导入,在那之前补全读的就是跟着目录一起移过去的 JSON。
+
+**数据库**用 VS Code 1.147 自带的 `node:sqlite` 只读打开,所以最低版本提高到了 1.147。`meta` 里的 revision
+没变就不重新读。schema 不认识的库一律不读,并提示更新扩展或插件。没有库(旧插件)时照旧读 JSON 文件。
+
+编辑器记在 `fx.db` 里的内容(最近一次 bridge 请求的诊断,不管是谁发的)会同步进 Problems,打开窗口时
+已经存在的那份也算 —— 但只同步记录之后没被改过的文件,改过的文件行号可能已对不上。每个文件以最新结果为准:
+和保存即校验的结果相同就不重复显示,不同(别处后来又编译过)就替换它;之后保存即校验再报这个文件时,以校验为准。
 
 ## 曲线编辑器
 
@@ -145,7 +187,8 @@ Unreal 编辑器开着这个工程时,`verify` 与 `build` **交给它做**,而�
 **后存的静默胜出**,先做的工作没了,而且哪儿都不报错。编辑器开着时,桥不是「更快的那条路」,
 而是**唯一正确的那条** —— 这也是为什么写包警告只出现在 CLI 路线上。
 
-它通过 `<Project>/Saved/DreamFX/Bridge/` 下的文件通信:无端口、无防火墙弹窗。
+它通过 `<Project>/Intermediate/DreamSource/FX/Bridge/` 下的文件通信(DreamSource 之前的插件用
+`Saved/DreamFX/Bridge/`;哪边有编辑器写的 `status.json` 就用哪边):无端口、无防火墙弹窗。
 需要插件侧的 `FBridgeService`;没有它则一切照旧 —— 没有 `status.json` 就是没有编辑器,
 所有命令走原来的 CLI 路线。
 
@@ -185,7 +228,7 @@ npm install && npm run package
 ## 使用
 
 工作区可以由插件生成 —— Unreal 编辑器里 **Tools → DreamFX → Open Workspace** 会写出
-`DFX/DreamFX.code-workspace`,把工程与各插件的源码根都列为文件夹,文件关联也已经指向本扩展。
+`DreamSource/FX/DreamFX.code-workspace`,把工程与各插件的源码根都列为文件夹,文件关联也已经指向本扩展。
 
 命令(`Ctrl+Shift+P`):
 
@@ -203,6 +246,7 @@ npm install && npm run package
 | `DreamFXLang: Adopt This Asset` | 让文本成为唯一真相源。需要桥 |
 | `DreamFXLang: Pull Values from Asset (needs the editor)` | 把在 Niagara 编辑器里改的数值经 diff 写回 `.dfs`。需要桥;**不保存** |
 | `DreamFXLang: Editor Bridge Status` | 当前走哪条路,以及 ping 一下 |
+| `DreamFX: Migrate to DreamSource` | 把旧的 `DFX/` 移到 `DreamSource/FX/`。编辑器运行时拒绝 |
 
 `verify` 与 `build` 同时以任务形式贡献,所以 `tasks.json` 里可以绑快捷键或设为默认构建任务:
 
@@ -244,7 +288,7 @@ npm test
 ```
 
 扩展是两个进程。`src/server/` 是一个标准 LSP server —— 补全、悬停、大纲、词法诊断,以及它们读的
-`.dfx-index.json`。`src/extension.ts` 是客户端:构建、校验、资产操作和编辑器桥,这些协议都管不着。
+模块索引。`src/extension.ts` 是客户端:构建、校验、资产操作和编辑器桥,这些协议都管不着。
 `src/core/` 下的语言核心既不 import `vscode`、也不 import 协议,正因如此 server 才能原封不动地从
 provider 里抬出来。
 
